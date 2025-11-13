@@ -1,5 +1,6 @@
 #include "storage.h"
 #include "ui.h"
+#include "config.h"
 #include <string.h>
 
 typedef struct {
@@ -11,8 +12,80 @@ typedef struct {
   uint8_t digits;
 } __attribute__((__packed__)) PersistedAccount;
 
+#ifdef DEBUG
+// Create fake account for debug mode
+static void prv_create_fake_account(size_t id, TotpAccount *account) {
+  memset(account, 0, sizeof(*account));
+  
+  // Base32 test secret: "JBSWY3DPEHPK3PXP" = "Hello!" in bytes
+  const uint8_t test_secret[] = {0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x21};
+  
+  switch (id) {
+    case 0:
+      strncpy(account->label, "GitHub", sizeof(account->label) - 1);
+      strncpy(account->account_name, "user@example.com", sizeof(account->account_name) - 1);
+      memcpy(account->secret, test_secret, sizeof(test_secret));
+      account->secret_len = sizeof(test_secret);
+      account->period = 30;
+      account->digits = 6;
+      break;
+      
+    case 1:
+      strncpy(account->label, "Google", sizeof(account->label) - 1);
+      strncpy(account->account_name, "test@gmail.com", sizeof(account->account_name) - 1);
+      memcpy(account->secret, test_secret, sizeof(test_secret));
+      account->secret_len = sizeof(test_secret);
+      account->period = 30;
+      account->digits = 6;
+      break;
+      
+    case 2:
+      strncpy(account->label, "Microsoft", sizeof(account->label) - 1);
+      strncpy(account->account_name, "work@outlook.com", sizeof(account->account_name) - 1);
+      memcpy(account->secret, test_secret, sizeof(test_secret));
+      account->secret_len = sizeof(test_secret);
+      account->period = 30;
+      account->digits = 8;
+      break;
+      
+    case 3:
+      strncpy(account->label, "Amazon", sizeof(account->label) - 1);
+      strncpy(account->account_name, "", sizeof(account->account_name) - 1);
+      memcpy(account->secret, test_secret, sizeof(test_secret));
+      account->secret_len = sizeof(test_secret);
+      account->period = 30;
+      account->digits = 6;
+      break;
+      
+    case 4:
+      strncpy(account->label, "Custom Service", sizeof(account->label) - 1);
+      strncpy(account->account_name, "admin", sizeof(account->account_name) - 1);
+      memcpy(account->secret, test_secret, sizeof(test_secret));
+      account->secret_len = sizeof(test_secret);
+      account->period = 60;
+      account->digits = 6;
+      break;
+      
+    default:
+      strncpy(account->label, "Test Account", sizeof(account->label) - 1);
+      strncpy(account->account_name, "", sizeof(account->account_name) - 1);
+      memcpy(account->secret, test_secret, sizeof(test_secret));
+      account->secret_len = sizeof(test_secret);
+      account->period = 30;
+      account->digits = 6;
+      break;
+  }
+  
+  APP_LOG(APP_LOG_LEVEL_INFO, "[DEBUG MODE] Created fake account %d: %s", (int)id, account->label);
+}
+#endif
+
 // Get account count
 size_t storage_get_count(void) {
+#ifdef DEBUG
+  APP_LOG(APP_LOG_LEVEL_INFO, "[DEBUG MODE] Returning fake account count: 5");
+  return 5;
+#else
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: checking PERSIST_KEY_COUNT=%d", PERSIST_KEY_COUNT);
   bool exists = persist_exists(PERSIST_KEY_COUNT);
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: persist_exists=%d", exists ? 1 : 0);
@@ -23,6 +96,7 @@ size_t storage_get_count(void) {
   int32_t count = persist_read_int(PERSIST_KEY_COUNT);
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: read count=%ld", (long)count);
   return (size_t)count;
+#endif
 }
 
 // Set account count
@@ -36,6 +110,15 @@ void storage_set_count(size_t count) {
 bool storage_load_account(size_t id, TotpAccount *account) {
   if (!account) return false;
 
+#ifdef DEBUG
+  APP_LOG(APP_LOG_LEVEL_INFO, "[DEBUG MODE] Loading fake account %d", (int)id);
+  if (id >= 5) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "[DEBUG MODE] Account ID %d out of range (max 4)", (int)id);
+    return false;
+  }
+  prv_create_fake_account(id, account);
+  return true;
+#else
   uint32_t key = PERSIST_KEY_ACCOUNTS_START + id;
   APP_LOG(APP_LOG_LEVEL_INFO, "Checking persistence key %d for account %d", (int)key, (int)id);
   if (!persist_exists(key)) {
@@ -61,6 +144,7 @@ bool storage_load_account(size_t id, TotpAccount *account) {
   APP_LOG(APP_LOG_LEVEL_INFO, "Account %d loaded: label='%s', account_name='%s', secret_len=%d, digits=%d, period=%d",
            (int)id, account->label, account->account_name, (int)account->secret_len, (int)account->digits, (int)account->period);
   return true;
+#endif
 }
 
 // Save account by ID
