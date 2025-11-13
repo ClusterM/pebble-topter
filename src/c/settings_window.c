@@ -123,7 +123,7 @@ static void prv_menu_draw_header_callback(GContext* ctx, const Layer *cell_layer
 }
 
 static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
-  bool has_pin = storage_has_pin();
+  bool has_pin = storage_is_pin_enabled();
   bool statusbar_enabled = storage_is_statusbar_enabled();
   
   switch (cell_index->row) {
@@ -157,7 +157,6 @@ static void prv_menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
       
       if (settings->pin_window) {
         pin_window_reset(settings->pin_window);
-        pin_window_set_highlight_color(settings->pin_window, GColorCobaltBlue);
         
         if (has_pin) {
           // Disable PIN mode

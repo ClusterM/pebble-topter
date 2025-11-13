@@ -16,10 +16,9 @@ static int s_pin_attempts = 0;
 static void prv_pin_complete_handler(Pin pin, void *context) {
   if (storage_verify_pin(pin.digits[0], pin.digits[1], pin.digits[2])) {
     s_pin_verified = true;
+    ui_init();
     pin_window_pop(s_pin_window, true);
-    
-    // Show success message briefly
-    vibes_short_pulse();
+    comms_init();
     
     APP_LOG(APP_LOG_LEVEL_INFO, "PIN verified successfully");
   } else {
@@ -59,12 +58,9 @@ static void prv_init(void) {
   // Load account count
   storage_load_accounts();
   ui_set_total_count(s_total_account_count);
-
-  ui_init();
-  comms_init();
-  
+ 
   // Check if PIN is enabled
-  if (storage_is_pin_enabled() && storage_has_pin()) {
+  if (storage_is_pin_enabled()) {
     s_pin_verified = false;
     s_pin_attempts = 0;
     
@@ -74,11 +70,12 @@ static void prv_init(void) {
     }, NULL);
     
     if (s_pin_window) {
-      pin_window_set_highlight_color(s_pin_window, GColorCobaltBlue);
       pin_window_push(s_pin_window, true);
     }
   } else {
     s_pin_verified = true;  // No PIN required
+    ui_init();
+    comms_init();
   }
 }
 

@@ -50,7 +50,7 @@ static void prv_draw_cell(SelectionLayer *selection_layer, GContext *ctx, int in
       graphics_draw_text(ctx,
                         text,
                         fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
-                        GRect(cell_x, (cell_height - 28) / 2, cell_width, 28),
+                        GRect(cell_x, (cell_height - 28) / 2 - 5, cell_width, 28),
                         GTextOverflowModeTrailingEllipsis,
                         GTextAlignmentCenter,
                         NULL);

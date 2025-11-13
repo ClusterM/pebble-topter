@@ -174,7 +174,7 @@ static uint32_t prv_hash_pin(int digit1, int digit2, int digit3) {
 }
 
 bool storage_is_pin_enabled(void) {
-  if (!persist_exists(PERSIST_KEY_PIN_ENABLED)) {
+  if (!persist_exists(PERSIST_KEY_PIN_ENABLED) || !storage_has_pin()) {
     return false;
   }
   return (bool)persist_read_bool(PERSIST_KEY_PIN_ENABLED);

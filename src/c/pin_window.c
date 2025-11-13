@@ -45,7 +45,7 @@ PinWindow* pin_window_create(PinWindowCallbacks callbacks, void *context) {
   memset(pin_window, 0, sizeof(PinWindow));
   pin_window->callbacks = callbacks;
   pin_window->callback_context = context;
-  pin_window->highlight_color = GColorRed;
+  pin_window->highlight_color = GColorCobaltBlue;
   
   pin_window->window = window_create();
   if (!pin_window->window) {
@@ -152,14 +152,6 @@ void pin_window_pop(PinWindow *pin_window, bool animated) {
 bool pin_window_get_topmost_window(PinWindow *pin_window) {
   if (!pin_window || !pin_window->window) return false;
   return window_stack_get_top_window() == pin_window->window;
-}
-
-void pin_window_set_highlight_color(PinWindow *pin_window, GColor color) {
-  if (!pin_window) return;
-  pin_window->highlight_color = color;
-  if (pin_window->selection) {
-    selection_layer_set_active_bg_color(pin_window->selection, color);
-  }
 }
 
 void pin_window_set_main_text(PinWindow *pin_window, const char *text) {

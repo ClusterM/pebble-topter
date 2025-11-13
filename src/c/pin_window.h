@@ -43,9 +43,6 @@ void pin_window_pop(PinWindow *pin_window, bool animated);
 // Check if PIN window is topmost
 bool pin_window_get_topmost_window(PinWindow *pin_window);
 
-// Set highlight color
-void pin_window_set_highlight_color(PinWindow *pin_window, GColor color);
-
 // Set main text
 void pin_window_set_main_text(PinWindow *pin_window, const char *text);
 
