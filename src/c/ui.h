@@ -28,6 +28,9 @@ void ui_deinit(void);
 // Set total account count and reload menu
 void ui_set_total_count(size_t count);
 
+// Set loading state
+void ui_set_loading(bool loading);
+
 // Update codes for all accounts
 void ui_update_codes(void);
 

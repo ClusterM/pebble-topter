@@ -9,6 +9,7 @@ MenuLayer *s_menu_layer;
 TextLayer *s_empty_layer;
 size_t s_total_account_count;
 AccountCache *s_account_cache;
+static bool s_is_loading = false;
 
 // ============================================================================
 // Account loading and caching
@@ -224,7 +225,38 @@ static void prv_update_empty_state(void) {
   if (!s_empty_layer || !s_menu_layer) return;
   
   bool has_accounts = s_total_account_count > 0;
-  layer_set_hidden(text_layer_get_layer(s_empty_layer), has_accounts);
+  
+  // Update empty layer text based on loading state
+  char const *text = "";
+  if (!has_accounts) {
+    if (s_is_loading) {
+      text = "Loading...";
+    } else {
+      text = "No accounts.\nAdd on the phone.";
+    }
+  }
+
+  Layer *layer = text_layer_get_layer(s_empty_layer);
+
+  text_layer_set_text_alignment(s_empty_layer, GTextAlignmentCenter);
+  text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_background_color(s_empty_layer, GColorWhite);
+  text_layer_set_text_color(s_empty_layer, GColorBlack);
+  text_layer_set_text(s_empty_layer, text);
+
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
+  GSize size = graphics_text_layout_get_content_size(text, 
+    fonts_get_system_font(FONT_KEY_GOTHIC_18), 
+    GRect(0, 0, bounds.size.w, bounds.size.h), 
+    GTextOverflowModeTrailingEllipsis, 
+    GTextAlignmentCenter);
+  APP_LOG(APP_LOG_LEVEL_INFO, "size: %d, %d", size.w, size.h);
+  APP_LOG(APP_LOG_LEVEL_INFO, "bounds: %d, %d, %d, %d", bounds.origin.x, bounds.origin.y, bounds.size.w, bounds.size.h);
+  layer_set_frame(layer, GRect(0, bounds.size.h / 2 - size.h / 2, bounds.size.w, size.h));
+  APP_LOG(APP_LOG_LEVEL_INFO, "layer bounds: %d, %d, %d, %d", layer_get_bounds(layer).origin.x, layer_get_bounds(layer).origin.y, layer_get_bounds(layer).size.w, layer_get_bounds(layer).size.h);
+  APP_LOG(APP_LOG_LEVEL_INFO, "parent bounds: %d, %d, %d, %d", layer_get_bounds(window_get_root_layer(s_window)).origin.x, layer_get_bounds(window_get_root_layer(s_window)).origin.y, layer_get_bounds(window_get_root_layer(s_window)).size.w, layer_get_bounds(window_get_root_layer(s_window)).size.h);  
+  
+  layer_set_hidden(layer, has_accounts);
   layer_set_hidden(menu_layer_get_layer(s_menu_layer), !has_accounts);
 }
 
@@ -235,6 +267,7 @@ static void prv_update_empty_state(void) {
 void ui_set_total_count(size_t count) {
   APP_LOG(APP_LOG_LEVEL_INFO, "ui_set_total_count: %d", (int)count);
   s_total_account_count = count;
+  s_is_loading = false; // Loading complete
   prv_init_account_cache();
   
   if (s_menu_layer) {
@@ -243,6 +276,12 @@ void ui_set_total_count(size_t count) {
   
   prv_update_empty_state();
   ui_update_codes();
+}
+
+void ui_set_loading(bool loading) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "ui_set_loading: %d", loading ? 1 : 0);
+  s_is_loading = loading;
+  prv_update_empty_state();
 }
 
 void ui_reload_data(void) {
@@ -274,12 +313,7 @@ static void prv_window_load(Window *window) {
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
   
   // Create empty state label
-  s_empty_layer = text_layer_create(GRect(4, 44, bounds.size.w - 8, 80));
-  text_layer_set_text_alignment(s_empty_layer, GTextAlignmentCenter);
-  text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
-  text_layer_set_background_color(s_empty_layer, GColorWhite);
-  text_layer_set_text_color(s_empty_layer, GColorBlack);
-  text_layer_set_text(s_empty_layer, "No accounts.\nAdd via phone app.");
+  s_empty_layer = text_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h));
   layer_add_child(window_layer, text_layer_get_layer(s_empty_layer));
   
   prv_update_empty_state();

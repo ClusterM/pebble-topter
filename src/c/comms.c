@@ -168,9 +168,10 @@ bool comms_parse_count(size_t count) {
   s_sync_expected_count = count;
   s_sync_received_count = 0;
 
-  // Очищаем существующие данные
+  // Clear existing data and show loading state
   storage_set_count(0);
   ui_set_total_count(0);
+  ui_set_loading(true); // Show "Loading..." message
 
   return true;
 }
