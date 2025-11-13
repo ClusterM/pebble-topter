@@ -19,16 +19,14 @@ static void prv_load_account(size_t index) {
   if (index >= s_total_account_count) return;
   
   AccountCache *cache = &s_account_cache[index];
-  if (cache->account) return; // already loaded
+  if (cache->account) return;
   
   cache->account = malloc(sizeof(TotpAccount));
   if (!cache->account) {
-    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate memory for account %d", (int)index);
     return;
   }
   
   if (!storage_load_account(index, cache->account)) {
-    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to load account %d from storage", (int)index);
     free(cache->account);
     cache->account = NULL;
     return;
@@ -36,8 +34,6 @@ static void prv_load_account(size_t index) {
   
   cache->code_valid = false;
   memset(cache->code, 0, sizeof(cache->code));
-  
-  APP_LOG(APP_LOG_LEVEL_INFO, "Loaded account %d: %s", (int)index, cache->account->label);
 }
 
 static void prv_free_account_cache(void) {
@@ -61,11 +57,9 @@ static void prv_init_account_cache(void) {
   
   s_account_cache = calloc(s_total_account_count, sizeof(AccountCache));
   if (!s_account_cache) {
-    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate account cache");
     return;
   }
   
-  // Pre-load all accounts (can be optimized for lazy loading later)
   for (size_t i = 0; i < s_total_account_count; i++) {
     prv_load_account(i);
   }
@@ -76,10 +70,16 @@ static void prv_init_account_cache(void) {
 // ============================================================================
 
 static uint16_t prv_menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+  (void)menu_layer;
+  (void)section_index;
+  (void)data;
   return s_total_account_count;
 }
 
 static int16_t prv_menu_get_cell_height_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
+  (void)menu_layer;
+  (void)data;
+  
   AccountCache *cache = &s_account_cache[cell_index->row];
   
   // Calculate height based on content
@@ -97,6 +97,8 @@ static int16_t prv_menu_get_cell_height_callback(MenuLayer *menu_layer, MenuInde
 }
 
 static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
+  (void)data;
+  
   if (cell_index->row >= s_total_account_count) return;
   
   AccountCache *cache = &s_account_cache[cell_index->row];
@@ -147,17 +149,6 @@ static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
   graphics_draw_line(ctx, GPoint(0, y), GPoint(cache->remaining * bounds.size.w / cache->account->period, y));
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx, GPoint(0, y), GPoint(bounds.size.w, y));
-  
-  // // Draw time remaining (right-aligned)
-  // if (cache->time_remaining[0] != '\0') {
-  //   graphics_draw_text(ctx,
-  //                     cache->time_remaining,
-  //                     fonts_get_system_font(FONT_KEY_GOTHIC_18),
-  //                     GRect(4, y - 6, bounds.size.w - 8, 18),
-  //                     GTextOverflowModeTrailingEllipsis,
-  //                     GTextAlignmentRight,
-  //                     NULL);
-  // }
 }
 
 // ============================================================================
@@ -175,9 +166,7 @@ void ui_update_codes(void) {
     AccountCache *cache = &s_account_cache[i];
     if (!cache->account) continue;
     
-    // Generate TOTP code
     if (!totp_generate(cache->account, now, cache->code, sizeof(cache->code), NULL)) {
-      APP_LOG(APP_LOG_LEVEL_ERROR, "TOTP generation failed for account %d", (int)i);
       snprintf(cache->code, sizeof(cache->code), "ERROR");
       cache->code_valid = false;
     } else {
@@ -239,7 +228,7 @@ static void prv_update_empty_state(void) {
   Layer *layer = text_layer_get_layer(s_empty_layer);
 
   text_layer_set_text_alignment(s_empty_layer, GTextAlignmentCenter);
-  text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_background_color(s_empty_layer, GColorWhite);
   text_layer_set_text_color(s_empty_layer, GColorBlack);
   text_layer_set_text(s_empty_layer, text);
@@ -250,11 +239,7 @@ static void prv_update_empty_state(void) {
     GRect(0, 0, bounds.size.w, bounds.size.h), 
     GTextOverflowModeTrailingEllipsis, 
     GTextAlignmentCenter);
-  APP_LOG(APP_LOG_LEVEL_INFO, "size: %d, %d", size.w, size.h);
-  APP_LOG(APP_LOG_LEVEL_INFO, "bounds: %d, %d, %d, %d", bounds.origin.x, bounds.origin.y, bounds.size.w, bounds.size.h);
-  layer_set_frame(layer, GRect(0, bounds.size.h / 2 - size.h / 2, bounds.size.w, size.h));
-  APP_LOG(APP_LOG_LEVEL_INFO, "layer bounds: %d, %d, %d, %d", layer_get_bounds(layer).origin.x, layer_get_bounds(layer).origin.y, layer_get_bounds(layer).size.w, layer_get_bounds(layer).size.h);
-  APP_LOG(APP_LOG_LEVEL_INFO, "parent bounds: %d, %d, %d, %d", layer_get_bounds(window_get_root_layer(s_window)).origin.x, layer_get_bounds(window_get_root_layer(s_window)).origin.y, layer_get_bounds(window_get_root_layer(s_window)).size.w, layer_get_bounds(window_get_root_layer(s_window)).size.h);  
+  layer_set_frame(layer, GRect(0, bounds.size.h / 2 - size.h / 2, bounds.size.w, size.h));  
   
   layer_set_hidden(layer, has_accounts);
   layer_set_hidden(menu_layer_get_layer(s_menu_layer), !has_accounts);
@@ -265,9 +250,8 @@ static void prv_update_empty_state(void) {
 // ============================================================================
 
 void ui_set_total_count(size_t count) {
-  APP_LOG(APP_LOG_LEVEL_INFO, "ui_set_total_count: %d", (int)count);
   s_total_account_count = count;
-  s_is_loading = false; // Loading complete
+  s_is_loading = false;
   prv_init_account_cache();
   
   if (s_menu_layer) {
@@ -279,7 +263,6 @@ void ui_set_total_count(size_t count) {
 }
 
 void ui_set_loading(bool loading) {
-  APP_LOG(APP_LOG_LEVEL_INFO, "ui_set_loading: %d", loading ? 1 : 0);
   s_is_loading = loading;
   prv_update_empty_state();
 }

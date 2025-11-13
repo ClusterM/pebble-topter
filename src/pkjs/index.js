@@ -87,10 +87,8 @@ const CONFIG_HTML = `
 
   <script>
   (function() {
-    console.log('[TOTPer] Script started');
     var initialData = decodeURIComponent('__INITIAL_DATA__');
     var entries = [];
-    console.log('[TOTPer] Initial data length:', initialData ? initialData.length : 0);
     try {
       if (initialData) {
         var parsed = JSON.parse(initialData);
@@ -394,25 +392,20 @@ const CONFIG_HTML = `
 
     // Save button
     document.getElementById('save').addEventListener('click', function() {
-      console.log('[TOTPer] Save button clicked');
-      console.log('[TOTPer] Current entries:', entries);
       if (!entries.length) {
         alert('Add at least one entry first.');
         return;
       }
       var payload = buildPayload(entries);
-      console.log('[TOTPer] Built payload:', payload);
       var result = {
         entries: entries,
         payload: payload
       };
       var url = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
-      console.log('[TOTPer] Closing with URL:', url);
       window.location = url;
     });
 
     renderEntries();
-    console.log('[TOTPer] Initialization complete');
   })();
   </script>
 </body>
@@ -426,21 +419,12 @@ function buildConfigUrl(initialEntries) {
 }
 
 function sendPayloadToWatch(payload) {
-  console.log('[TOTPer] sendPayloadToWatch called with payload:', payload);
   return new Promise((resolve, reject) => {
-    // Parse payload into individual entries
     const entries = payload.split(';').filter(entry => entry.trim() !== '');
-    console.log('[TOTPer] Parsed entries:', entries);
 
-    // First send the count of entries
-    console.log('[TOTPer] Sending count:', entries.length);
     Pebble.sendAppMessage(
       { AppKeyCount: entries.length },
       () => {
-        console.log('[TOTPer] Count sent successfully');
-
-        // Then send each entry individually with delay
-        let sentCount = 0;
         const totalCount = entries.length;
 
         if (totalCount === 0) {
@@ -450,31 +434,25 @@ function sendPayloadToWatch(payload) {
 
         function sendNextEntry(index) {
           if (index >= totalCount) {
-            console.log('[TOTPer] All entries sent, resolving');
             resolve();
             return;
           }
 
-          console.log('[TOTPer] Sending entry', index, ':', entries[index].trim());
           Pebble.sendAppMessage(
             {
               AppKeyEntryId: index,
               AppKeyEntry: entries[index].trim()
             },
             () => {
-              console.log('[TOTPer] Entry', index, 'sent successfully');
-              sentCount++;
-              // Send next one after 100ms
               setTimeout(() => sendNextEntry(index + 1), 100);
             },
             err => {
-              console.log('[TOTPer] Failed to send entry', index, ':', err);
+              console.log('Failed to send entry', index, ':', err);
               reject(err);
             }
           );
         }
 
-        // Start sending first entry 200ms after count
         setTimeout(() => sendNextEntry(0), 200);
       },
       err => reject(err)
@@ -487,31 +465,22 @@ function requestResend() {
 }
 
 Pebble.addEventListener('ready', () => {
-  console.log('TOTPer ready');
-  // Don't send stored data automatically on startup
-  // They will be sent only on explicit save
   requestResend();
 });
 
 Pebble.addEventListener('showConfiguration', () => {
-  console.log('[TOTPer] showConfiguration called');
   const storedEntries = localStorage.getItem('TOTPerConfigEntries') || '';
-  console.log('[TOTPer] storedEntries:', storedEntries);
   const url = buildConfigUrl(storedEntries);
-  console.log('[TOTPer] Opening URL:', url);
   Pebble.openURL(url);
 });
 
 Pebble.addEventListener('webviewclosed', e => {
-  console.log('[TOTPer] webviewclosed called', e);
   if (!e || !e.response) {
-    console.log('[TOTPer] No response in webviewclosed');
     return;
   }
   let data;
   try {
     data = JSON.parse(decodeURIComponent(e.response));
-    console.log('[TOTPer] Parsed data:', data);
   } catch (err) {
     console.log('Failed to parse config response', err);
     return;
@@ -520,12 +489,10 @@ Pebble.addEventListener('webviewclosed', e => {
   if (data.reset) {
     localStorage.removeItem('TOTPerConfigEntries');
     localStorage.removeItem('TOTPerConfigPayload');
-    // No need to send clear command to watch - just clear local storage
     return;
   }
 
   if (!Array.isArray(data.entries) || typeof data.payload !== 'string') {
-    console.log('Config response invalid');
     return;
   }
 
@@ -536,15 +503,7 @@ Pebble.addEventListener('webviewclosed', e => {
   });
 });
 
-Pebble.addEventListener('appmessage', e => {
-  console.log('[TOTPer] Received appmessage:', e);
-  const payload = e.payload || {};
-  if (payload.AppKeyRequest) {
-    console.log('[TOTPer] Received AppKeyRequest - ignoring for unidirectional sync');
-    // For unidirectional sync, don't send data automatically
-  }
-  if (payload.AppKeyStatus !== undefined) {
-    console.log('[TOTPer] Watch status:', payload.AppKeyStatus);
-  }
+Pebble.addEventListener('appmessage', () => {
+  // Message handling not needed for unidirectional sync
 });
 
