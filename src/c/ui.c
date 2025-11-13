@@ -217,12 +217,12 @@ void ui_update_codes(void) {
       continue;
     }
 
-    APP_LOG(APP_LOG_LEVEL_INFO, "Generating TOTP for account %d: label='%s', secret_len=%d, digits=%d, period=%d, now=%ld",
-             (int)i, view->account->label, (int)view->account->secret_len, (int)view->account->digits, (int)view->account->period, (long)now);
+    // APP_LOG(APP_LOG_LEVEL_INFO, "Generating TOTP for account %d: label='%s', secret_len=%d, digits=%d, period=%d, now=%ld",
+    //          (int)i, view->account->label, (int)view->account->secret_len, (int)view->account->digits, (int)view->account->period, (long)now);
 
     uint32_t period_val = view->account->period > 0 ? view->account->period : DEFAULT_PERIOD;
     uint64_t counter = (uint64_t)(now / period_val);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Calculated counter: %llu for period %d", counter, (int)period_val);
+    // APP_LOG(APP_LOG_LEVEL_INFO, "Calculated counter: %llu for period %d", counter, (int)period_val);
 
     if (!totp_generate(view->account, now, view->code, sizeof(view->code), NULL)) {
       APP_LOG(APP_LOG_LEVEL_ERROR, "TOTP generation failed for account %d", (int)i);
@@ -230,13 +230,13 @@ void ui_update_codes(void) {
       continue;
     }
 
-    APP_LOG(APP_LOG_LEVEL_INFO, "Generated code: '%s' (len=%d)", view->code, (int)strlen(view->code));
+    //APP_LOG(APP_LOG_LEVEL_INFO, "Generated code: '%s' (len=%d)", view->code, (int)strlen(view->code));
     // Log each character in hex for debugging
     // for (size_t j = 0; j < strlen(view->code) && j < 10; j++) {
     //   APP_LOG(APP_LOG_LEVEL_INFO, "view->code[%d] = '%c' (0x%02x)", j, view->code[j], (unsigned char)view->code[j]);
     // }
     text_layer_set_text(view->code_layer, view->code);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Text set to '%s' for account %d", view->code, (int)i);
+    //APP_LOG(APP_LOG_LEVEL_INFO, "Text set to '%s' for account %d", view->code, (int)i);
 
     uint32_t period = view->account->period > 0 ? view->account->period : DEFAULT_PERIOD;
     uint32_t elapsed = (uint32_t)(now % period);

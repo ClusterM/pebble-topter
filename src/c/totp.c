@@ -247,9 +247,9 @@ bool totp_generate(const TotpAccount *account, time_t now, char *output, size_t 
   uint32_t period = account->period > 0 ? account->period : DEFAULT_PERIOD;
   uint8_t digits = account->digits >= MIN_DIGITS && account->digits <= MAX_DIGITS ? account->digits : DEFAULT_DIGITS;
 
-  APP_LOG(APP_LOG_LEVEL_INFO, "totp_generate: now=%ld, period=%d", (long)now, (int)period);
+  // APP_LOG(APP_LOG_LEVEL_INFO, "totp_generate: now=%ld, period=%d", (long)now, (int)period);
   uint64_t counter = (uint64_t)(now / period);
-  APP_LOG(APP_LOG_LEVEL_INFO, "totp_generate: counter=%llu", counter);
+  // APP_LOG(APP_LOG_LEVEL_INFO, "totp_generate: counter=%llu", counter);
   uint8_t message[8];
   for (int i = 7; i >= 0; i--) {
     message[i] = (uint8_t)(counter & 0xFF);
