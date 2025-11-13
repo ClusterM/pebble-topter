@@ -36,6 +36,8 @@ const CONFIG_HTML = `
     .hint { font-size: 13px; color: #b0bec5; margin-bottom: 16px; text-align: center; }
     .drag-handle { margin-right: 12px; color: #666; font-size: 18px; }
   </style>
+</head>
+<body>
   <h1>TOTPer</h1>
   <div id="entries" class="entries"></div>
 
@@ -63,7 +65,8 @@ const CONFIG_HTML = `
 
     <div id="qr" class="tab-content">
       <div class="qr-section">
-        <p>Paste otpauth URL from QR code:</p>
+        <p>Paste otpauth URL(s) from QR code(s):</p>
+        <p style="font-size: 12px; color: #9e9e9e;">One URL per line. Duplicates will be skipped.</p>
         <div class="form-group">
           <textarea id="qr-input" placeholder="otpauth://totp/..."></textarea>
         </div>
@@ -233,6 +236,37 @@ const CONFIG_HTML = `
       }
     }
 
+    function isDuplicate(newEntry) {
+      return entries.some(function(existingEntry) {
+        return existingEntry.secret === newEntry.secret;
+      });
+    }
+
+    function processMultipleUrls(text) {
+      var newline = String.fromCharCode(10);
+      var lines = text.split(newline);
+      var results = { added: 0, skipped: 0, errors: 0 };
+      
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        
+        try {
+          var entry = parseOtpUri(line);
+          if (isDuplicate(entry)) {
+            results.skipped++;
+          } else {
+            entries.push(entry);
+            results.added++;
+          }
+        } catch (e) {
+          results.errors++;
+        }
+      }
+      
+      return results;
+    }
+
     function switchTab(tabName) {
       // Hide all tabs
       var tabs = document.querySelectorAll('.tab');
@@ -260,13 +294,20 @@ const CONFIG_HTML = `
         return;
       }
 
-      entries.push({
+      var newEntry = {
         label: label,
         account_name: account,
         secret: secret,
         period: 30,
         digits: 6
-      });
+      };
+
+      if (isDuplicate(newEntry)) {
+        alert('This secret already exists in your list!');
+        return;
+      }
+
+      entries.push(newEntry);
 
       // Clear form
       document.getElementById('manual-label').value = '';
@@ -281,26 +322,36 @@ const CONFIG_HTML = `
       var resultDiv = document.getElementById('qr-result');
 
       if (!qrText) {
-        alert('Please paste an otpauth URL!');
+        alert('Please paste at least one otpauth URL!');
         return;
       }
 
-      try {
-        var entry = parseOtpUri(qrText);
-        entries.push(entry);
+      var results = processMultipleUrls(qrText);
+      
+      if (results.added === 0 && results.skipped === 0 && results.errors === 0) {
+        alert('No valid URLs found!');
+        return;
+      }
 
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '✓ Successfully added:<br>' +
-          '<strong>' + entry.label + '</strong><br>' +
-          (entry.account_name ? entry.account_name + '<br>' : '') +
-          'Secret: ' + entry.secret.substring(0, 8) + '...<br>' +
-          'Period: ' + entry.period + 's, Digits: ' + entry.digits;
+      var resultText = '';
+      if (results.added > 0) {
+        resultText += 'Added: ' + results.added;
+      }
+      if (results.skipped > 0) {
+        if (resultText) resultText += ', ';
+        resultText += 'Duplicates: ' + results.skipped;
+      }
+      if (results.errors > 0) {
+        if (resultText) resultText += ', ';
+        resultText += 'Errors: ' + results.errors;
+      }
 
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = resultText;
+
+      if (results.added > 0) {
         document.getElementById('qr-input').value = '';
         renderEntries();
-      } catch (err) {
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '✗ Error: ' + err.message;
       }
     }
 
