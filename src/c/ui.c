@@ -4,6 +4,9 @@
 #include "settings_window.h"
 #include <string.h>
 
+// Forward declarations
+static void prv_menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data);
+
 // UI global variables
 Window *s_window;
 MenuLayer *s_menu_layer;
@@ -327,10 +330,13 @@ void ui_reload_window(void) {
     .get_num_rows = prv_menu_get_num_rows_callback,
     .get_cell_height = prv_menu_get_cell_height_callback,
     .draw_row = prv_menu_draw_row_callback,
+    .select_click = prv_menu_select_callback,
   });
   
   // Disable highlight by making it the same color as background
   menu_layer_set_highlight_colors(s_menu_layer, GColorWhite, GColorBlack);
+  
+  menu_layer_set_click_config_onto_window(s_menu_layer, s_window);
   
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
   
@@ -347,11 +353,11 @@ void ui_reload_window(void) {
 }
 
 // ============================================================================
-// Click handlers
+// Menu callbacks
 // ============================================================================
 
-static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Open settings window
+static void prv_menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
+  // Open settings window on any menu item click
   if (!s_settings_window) {
     s_settings_window = settings_window_create();
   }
@@ -359,18 +365,6 @@ static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *c
   if (s_settings_window) {
     settings_window_push(s_settings_window, true);
   }
-}
-
-static void prv_click_config_provider(void *context) {
-  // Set up menu layer click config
-  menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
-    .get_num_rows = prv_menu_get_num_rows_callback,
-    .get_cell_height = prv_menu_get_cell_height_callback,
-    .draw_row = prv_menu_draw_row_callback,
-  });
-  
-  // Add long press for settings
-  window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_select_long_click_handler, NULL);
 }
 
 // ============================================================================
@@ -405,13 +399,13 @@ static void prv_window_load(Window *window) {
     .get_num_rows = prv_menu_get_num_rows_callback,
     .get_cell_height = prv_menu_get_cell_height_callback,
     .draw_row = prv_menu_draw_row_callback,
+    .select_click = prv_menu_select_callback,
   });
   
   // Disable highlight by making it the same color as background
   menu_layer_set_highlight_colors(s_menu_layer, GColorWhite, GColorBlack);
   
-  // Set up custom click config provider instead of using menu layer's default
-  window_set_click_config_provider_with_context(window, prv_click_config_provider, NULL);
+  menu_layer_set_click_config_onto_window(s_menu_layer, window);
   
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
   
