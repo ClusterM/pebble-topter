@@ -3,15 +3,21 @@
 #include "storage.h"
 
 #define MENU_SECTION_MAIN 0
-#define MENU_ROW_PIN_STATUS 0
-#define MENU_ROW_CHANGE_PIN 1
-#define MENU_ROW_DISABLE_PIN 2
+#define MENU_ROW_PIN_ACTION 0
+
+typedef enum {
+  PIN_MODE_NONE,
+  PIN_MODE_SET_FIRST,      // Setting PIN - first entry
+  PIN_MODE_SET_CONFIRM,    // Setting PIN - confirmation
+  PIN_MODE_DISABLE         // Disabling PIN - verification
+} PinMode;
 
 struct SettingsWindow {
   Window *window;
   MenuLayer *menu_layer;
   PinWindow *pin_window;
-  bool setting_new_pin;
+  PinMode current_mode;
+  Pin first_pin;  // Store first PIN entry for confirmation
 };
 
 static SettingsWindow *s_settings_window = NULL;
@@ -23,20 +29,74 @@ static SettingsWindow *s_settings_window = NULL;
 static void prv_pin_setup_complete(Pin pin, void *context) {
   SettingsWindow *settings = (SettingsWindow*)context;
   
-  if (settings->setting_new_pin) {
-    // Save new PIN
-    storage_set_pin(pin.digits[0], pin.digits[1], pin.digits[2]);
-    pin_window_pop(settings->pin_window, true);
-    
-    // Show success feedback
-    vibes_short_pulse();
-    
-    APP_LOG(APP_LOG_LEVEL_INFO, "PIN set successfully");
-    
-    // Reload menu to update status
-    if (settings->menu_layer) {
-      menu_layer_reload_data(settings->menu_layer);
-    }
+  switch (settings->current_mode) {
+    case PIN_MODE_SET_FIRST:
+      // First PIN entry - save and ask for confirmation
+      settings->first_pin = pin;
+      settings->current_mode = PIN_MODE_SET_CONFIRM;
+      
+      pin_window_reset(settings->pin_window);
+      pin_window_set_main_text(settings->pin_window, "Confirm PIN");
+      pin_window_set_sub_text(settings->pin_window, "Enter PIN again");
+      break;
+      
+    case PIN_MODE_SET_CONFIRM:
+      // Second PIN entry - verify match
+      if (pin.digits[0] == settings->first_pin.digits[0] &&
+          pin.digits[1] == settings->first_pin.digits[1] &&
+          pin.digits[2] == settings->first_pin.digits[2]) {
+        // PINs match - save it
+        storage_set_pin(pin.digits[0], pin.digits[1], pin.digits[2]);
+        pin_window_pop(settings->pin_window, true);
+        
+        vibes_short_pulse();
+        APP_LOG(APP_LOG_LEVEL_INFO, "PIN set successfully");
+        
+        settings->current_mode = PIN_MODE_NONE;
+        if (settings->menu_layer) {
+          menu_layer_reload_data(settings->menu_layer);
+        }
+      } else {
+        // PINs don't match - start over
+        vibes_long_pulse();
+        settings->current_mode = PIN_MODE_SET_FIRST;
+        
+        pin_window_reset(settings->pin_window);
+        pin_window_set_main_text(settings->pin_window, "PIN Mismatch");
+        pin_window_set_sub_text(settings->pin_window, "Try again");
+        
+        APP_LOG(APP_LOG_LEVEL_WARNING, "PIN confirmation failed");
+      }
+      break;
+      
+    case PIN_MODE_DISABLE:
+      // Verify current PIN to disable
+      if (storage_verify_pin(pin.digits[0], pin.digits[1], pin.digits[2])) {
+        // Correct PIN - disable it
+        storage_clear_pin();
+        pin_window_pop(settings->pin_window, true);
+        
+        vibes_double_pulse();
+        APP_LOG(APP_LOG_LEVEL_INFO, "PIN disabled");
+        
+        settings->current_mode = PIN_MODE_NONE;
+        if (settings->menu_layer) {
+          menu_layer_reload_data(settings->menu_layer);
+        }
+      } else {
+        // Wrong PIN
+        vibes_long_pulse();
+        
+        pin_window_reset(settings->pin_window);
+        pin_window_set_main_text(settings->pin_window, "Wrong PIN");
+        pin_window_set_sub_text(settings->pin_window, "Try again");
+        
+        APP_LOG(APP_LOG_LEVEL_WARNING, "PIN verification failed");
+      }
+      break;
+      
+    default:
+      break;
   }
 }
 
@@ -49,13 +109,7 @@ static uint16_t prv_menu_get_num_sections_callback(MenuLayer *menu_layer, void *
 }
 
 static uint16_t prv_menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
-  bool has_pin = storage_has_pin();
-  
-  if (has_pin) {
-    return 3;  // Status, Change PIN, Disable PIN
-  } else {
-    return 2;  // Status, Set PIN
-  }
+  return 1;  // Only one menu item: Set PIN or Disable PIN
 }
 
 static int16_t prv_menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
@@ -68,31 +122,13 @@ static void prv_menu_draw_header_callback(GContext* ctx, const Layer *cell_layer
 
 static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
   bool has_pin = storage_has_pin();
-  bool pin_enabled = storage_is_pin_enabled();
   
-  switch (cell_index->row) {
-    case MENU_ROW_PIN_STATUS:
-      if (has_pin) {
-        menu_cell_basic_draw(ctx, cell_layer, "PIN Status", 
-                            pin_enabled ? "Enabled" : "Disabled", NULL);
-      } else {
-        menu_cell_basic_draw(ctx, cell_layer, "PIN Status", "Not Set", NULL);
-      }
-      break;
-      
-    case MENU_ROW_CHANGE_PIN:
-      if (has_pin) {
-        menu_cell_basic_draw(ctx, cell_layer, "Change PIN", "Set new PIN code", NULL);
-      } else {
-        menu_cell_basic_draw(ctx, cell_layer, "Set PIN", "Create new PIN code", NULL);
-      }
-      break;
-      
-    case MENU_ROW_DISABLE_PIN:
-      if (has_pin) {
-        menu_cell_basic_draw(ctx, cell_layer, "Disable PIN", "Remove PIN protection", NULL);
-      }
-      break;
+  if (cell_index->row == MENU_ROW_PIN_ACTION) {
+    if (has_pin) {
+      menu_cell_basic_draw(ctx, cell_layer, "Disable PIN", "Enter PIN to remove", NULL);
+    } else {
+      menu_cell_basic_draw(ctx, cell_layer, "Set PIN", "Enter PIN twice", NULL);
+    }
   }
 }
 
@@ -100,53 +136,32 @@ static void prv_menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
   SettingsWindow *settings = (SettingsWindow*)data;
   bool has_pin = storage_has_pin();
   
-  switch (cell_index->row) {
-    case MENU_ROW_PIN_STATUS:
-      // Toggle PIN enabled/disabled (only if PIN is set)
+  if (cell_index->row == MENU_ROW_PIN_ACTION) {
+    // Create PIN window if it doesn't exist
+    if (!settings->pin_window) {
+      settings->pin_window = pin_window_create((PinWindowCallbacks){
+        .pin_complete = prv_pin_setup_complete
+      }, settings);
+    }
+    
+    if (settings->pin_window) {
+      pin_window_reset(settings->pin_window);
+      pin_window_set_highlight_color(settings->pin_window, GColorCobaltBlue);
+      
       if (has_pin) {
-        bool current = storage_is_pin_enabled();
-        storage_set_pin_enabled(!current);
-        menu_layer_reload_data(menu_layer);
-        vibes_short_pulse();
-      }
-      break;
-      
-    case MENU_ROW_CHANGE_PIN:
-      // Show PIN entry window
-      settings->setting_new_pin = true;
-      
-      if (!settings->pin_window) {
-        settings->pin_window = pin_window_create((PinWindowCallbacks){
-          .pin_complete = prv_pin_setup_complete
-        }, settings);
+        // Disable PIN mode
+        settings->current_mode = PIN_MODE_DISABLE;
+        pin_window_set_main_text(settings->pin_window, "Disable PIN");
+        pin_window_set_sub_text(settings->pin_window, "Enter current PIN");
+      } else {
+        // Set PIN mode - first entry
+        settings->current_mode = PIN_MODE_SET_FIRST;
+        pin_window_set_main_text(settings->pin_window, "Set PIN");
+        pin_window_set_sub_text(settings->pin_window, "Enter new PIN");
       }
       
-      if (settings->pin_window) {
-        pin_window_reset(settings->pin_window);
-        pin_window_set_highlight_color(settings->pin_window, GColorCobaltBlue);
-        
-        if (has_pin) {
-          pin_window_set_main_text(settings->pin_window, "Change PIN");
-          pin_window_set_sub_text(settings->pin_window, "Enter new PIN");
-        } else {
-          pin_window_set_main_text(settings->pin_window, "Set PIN");
-          pin_window_set_sub_text(settings->pin_window, "Enter new PIN");
-        }
-        
-        pin_window_push(settings->pin_window, true);
-      }
-      break;
-      
-    case MENU_ROW_DISABLE_PIN:
-      if (has_pin) {
-        // Clear PIN
-        storage_clear_pin();
-        menu_layer_reload_data(menu_layer);
-        vibes_double_pulse();
-        
-        APP_LOG(APP_LOG_LEVEL_INFO, "PIN disabled");
-      }
-      break;
+      pin_window_push(settings->pin_window, true);
+    }
   }
 }
 
