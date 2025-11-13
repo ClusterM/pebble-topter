@@ -157,3 +157,63 @@ void storage_load_accounts(void) {
   s_total_account_count = storage_get_count();
 }
 
+// ============================================================================
+// PIN management
+// ============================================================================
+
+// Simple hash function for 3-digit PIN (0-999)
+static uint32_t prv_hash_pin(int digit1, int digit2, int digit3) {
+  uint32_t pin = (digit1 * 100) + (digit2 * 10) + digit3;
+  // Simple XOR-based hash with some mixing
+  uint32_t hash = pin;
+  hash ^= (hash << 13);
+  hash ^= (hash >> 17);
+  hash ^= (hash << 5);
+  hash ^= 0xDEADBEEF;  // Salt
+  return hash;
+}
+
+bool storage_is_pin_enabled(void) {
+  if (!persist_exists(PERSIST_KEY_PIN_ENABLED)) {
+    return false;
+  }
+  return (bool)persist_read_bool(PERSIST_KEY_PIN_ENABLED);
+}
+
+void storage_set_pin_enabled(bool enabled) {
+  persist_write_bool(PERSIST_KEY_PIN_ENABLED, enabled);
+}
+
+bool storage_has_pin(void) {
+  return persist_exists(PERSIST_KEY_PIN_HASH);
+}
+
+uint32_t storage_get_pin_hash(void) {
+  if (!persist_exists(PERSIST_KEY_PIN_HASH)) {
+    return 0;
+  }
+  return (uint32_t)persist_read_int(PERSIST_KEY_PIN_HASH);
+}
+
+void storage_set_pin(int pin_digit1, int pin_digit2, int pin_digit3) {
+  uint32_t hash = prv_hash_pin(pin_digit1, pin_digit2, pin_digit3);
+  persist_write_int(PERSIST_KEY_PIN_HASH, hash);
+  storage_set_pin_enabled(true);
+}
+
+bool storage_verify_pin(int pin_digit1, int pin_digit2, int pin_digit3) {
+  if (!storage_has_pin()) {
+    return true;  // No PIN set, always valid
+  }
+  
+  uint32_t entered_hash = prv_hash_pin(pin_digit1, pin_digit2, pin_digit3);
+  uint32_t stored_hash = storage_get_pin_hash();
+  
+  return entered_hash == stored_hash;
+}
+
+void storage_clear_pin(void) {
+  persist_delete(PERSIST_KEY_PIN_HASH);
+  storage_set_pin_enabled(false);
+}
+

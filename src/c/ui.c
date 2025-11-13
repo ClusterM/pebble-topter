@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "totp.h"
 #include "storage.h"
+#include "settings_window.h"
 #include <string.h>
 
 // UI global variables
@@ -10,6 +11,7 @@ TextLayer *s_empty_layer;
 size_t s_total_account_count;
 AccountCache *s_account_cache;
 static bool s_is_loading = false;
+static SettingsWindow *s_settings_window = NULL;
 
 // ============================================================================
 // Account loading and caching
@@ -274,6 +276,33 @@ void ui_reload_data(void) {
 }
 
 // ============================================================================
+// Click handlers
+// ============================================================================
+
+static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Open settings window
+  if (!s_settings_window) {
+    s_settings_window = settings_window_create();
+  }
+  
+  if (s_settings_window) {
+    settings_window_push(s_settings_window, true);
+  }
+}
+
+static void prv_click_config_provider(void *context) {
+  // Set up menu layer click config
+  menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
+    .get_num_rows = prv_menu_get_num_rows_callback,
+    .get_cell_height = prv_menu_get_cell_height_callback,
+    .draw_row = prv_menu_draw_row_callback,
+  });
+  
+  // Add long press for settings
+  window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_select_long_click_handler, NULL);
+}
+
+// ============================================================================
 // Window lifecycle
 // ============================================================================
 
@@ -292,7 +321,9 @@ static void prv_window_load(Window *window) {
   // Disable highlight by making it the same color as background
   menu_layer_set_highlight_colors(s_menu_layer, GColorWhite, GColorBlack);
   
-  menu_layer_set_click_config_onto_window(s_menu_layer, window);
+  // Set up custom click config provider instead of using menu layer's default
+  window_set_click_config_provider_with_context(window, prv_click_config_provider, NULL);
+  
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
   
   // Create empty state label
@@ -335,6 +366,11 @@ void ui_init(void) {
 
 void ui_deinit(void) {
   tick_timer_service_unsubscribe();
+  
+  if (s_settings_window) {
+    settings_window_destroy(s_settings_window);
+    s_settings_window = NULL;
+  }
   
   if (s_window) {
     window_destroy(s_window);
