@@ -8,7 +8,7 @@
 typedef struct {
   TotpAccount *account;  // Pointer to loaded account (NULL if not loaded)
   char code[9];  // Buffer for TOTP code (max 8 digits + null)
-  char time_remaining[8];  // Buffer for time remaining display
+  uint32_t remaining;
   bool code_valid;  // Whether code has been generated
 } AccountCache;
 

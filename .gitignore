@@ -19,3 +19,4 @@ Thumbs.db
 .pebble/
 .waf*
 .lock-waf_linux_build
+.clangd

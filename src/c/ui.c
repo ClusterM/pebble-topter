@@ -35,7 +35,6 @@ static void prv_load_account(size_t index) {
   
   cache->code_valid = false;
   memset(cache->code, 0, sizeof(cache->code));
-  memset(cache->time_remaining, 0, sizeof(cache->time_remaining));
   
   APP_LOG(APP_LOG_LEVEL_INFO, "Loaded account %d: %s", (int)index, cache->account->label);
 }
@@ -80,22 +79,18 @@ static uint16_t prv_menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t s
 }
 
 static int16_t prv_menu_get_cell_height_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
-  if (cell_index->row >= s_total_account_count) return 44;
-  
   AccountCache *cache = &s_account_cache[cell_index->row];
-  if (!cache->account) return 44;
   
   // Calculate height based on content
-  // Label: 20px, Account name (if present): 16px, Code: 34px, Time: 18px (overlaps), spacing: 4px
-  int16_t height = 4 + 20; // top padding + label
+  int16_t height = 0 + 15; // top padding + label
   
-  if (cache->account->account_name[0] != '\0') {
-    height += 16; // account name
+  if (cache->account &&cache->account->account_name[0] != '\0') {
+    height += 10; // account name
   }
   
-  height += 34; // code
-  height += 18; // time remaining
-  height += 4; // bottom padding
+  height += 35; // code
+  height += 1; // time remaining
+  height += 0; // bottom padding
   
   return height;
 }
@@ -110,7 +105,7 @@ static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
   }
   
   GRect bounds = layer_get_bounds(cell_layer);
-  int16_t y = 4;
+  int16_t y = 0;
   
   // Always use black text (no highlight visual feedback needed)
   graphics_context_set_text_color(ctx, GColorBlack);
@@ -121,7 +116,7 @@ static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
                     GTextOverflowModeTrailingEllipsis,
                     GTextAlignmentLeft,
                     NULL);
-  y += 20;
+  y += 15;
   
   // Draw account name (if present)
   if (cache->account->account_name[0] != '\0') {
@@ -132,7 +127,7 @@ static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
                       GTextOverflowModeTrailingEllipsis,
                       GTextAlignmentLeft,
                       NULL);
-    y += 16;
+    y += 10;
   }
   
   // Draw TOTP code (large, centered)
@@ -144,18 +139,24 @@ static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
                     GTextOverflowModeTrailingEllipsis,
                     GTextAlignmentCenter,
                     NULL);
-  y += 34;
+  y += 35;
+
+  graphics_context_set_stroke_color(ctx, GColorBlack);
+  graphics_context_set_stroke_width(ctx, 5);
+  graphics_draw_line(ctx, GPoint(0, y), GPoint(cache->remaining * bounds.size.w / cache->account->period, y));
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_line(ctx, GPoint(0, y), GPoint(bounds.size.w, y));
   
-  // Draw time remaining (right-aligned)
-  if (cache->time_remaining[0] != '\0') {
-    graphics_draw_text(ctx,
-                      cache->time_remaining,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18),
-                      GRect(4, y - 6, bounds.size.w - 8, 18),
-                      GTextOverflowModeTrailingEllipsis,
-                      GTextAlignmentRight,
-                      NULL);
-  }
+  // // Draw time remaining (right-aligned)
+  // if (cache->time_remaining[0] != '\0') {
+  //   graphics_draw_text(ctx,
+  //                     cache->time_remaining,
+  //                     fonts_get_system_font(FONT_KEY_GOTHIC_18),
+  //                     GRect(4, y - 6, bounds.size.w - 8, 18),
+  //                     GTextOverflowModeTrailingEllipsis,
+  //                     GTextAlignmentRight,
+  //                     NULL);
+  // }
 }
 
 // ============================================================================
@@ -167,6 +168,7 @@ void ui_update_codes(void) {
   
   time_t now = time(NULL);
   bool needs_redraw = false;
+  bool needs_vibe = false;
   
   for (size_t i = 0; i < s_total_account_count; i++) {
     AccountCache *cache = &s_account_cache[i];
@@ -184,17 +186,21 @@ void ui_update_codes(void) {
     // Calculate time remaining
     uint32_t period = cache->account->period > 0 ? cache->account->period : DEFAULT_PERIOD;
     uint32_t elapsed = (uint32_t)(now % period);
-    uint32_t remaining = period - elapsed;
-    if (remaining == 0) {
-      remaining = period;
+    cache->remaining = period - elapsed;
+    if (cache->remaining == 0) {
+      cache->remaining = period;
+      needs_vibe = true;
     }
     
-    snprintf(cache->time_remaining, sizeof(cache->time_remaining), "%lus", (unsigned long)remaining);
     needs_redraw = true;
   }
   
   if (needs_redraw && s_menu_layer) {
     layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
+  }
+
+  if (needs_vibe) {
+    vibes_short_pulse();
   }
 }
 
