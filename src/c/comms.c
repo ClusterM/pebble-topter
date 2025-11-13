@@ -5,6 +5,10 @@
 #include "message_keys.auto.h"
 #include <string.h>
 
+// Состояние синхронизации
+static size_t s_sync_expected_count = 0;
+static size_t s_sync_received_count = 0;
+
 static void prv_request_sync(void) {
   DictionaryIterator *iter = NULL;
   AppMessageResult res = app_message_outbox_begin(&iter);
@@ -28,17 +32,28 @@ static void prv_send_status(uint8_t status_code) {
   app_message_outbox_send();
 }
 
+// Функции отправки данных с часов на телефон удалены (односторонняя синхронизация)
+
 static bool prv_parse_line(const char *line, TotpAccount *out_account) {
   if (!line || !out_account) {
     return false;
   }
 
-  char buffer[SECRET_BASE32_MAX_LEN + NAME_MAX_LEN + 24];
+  APP_LOG(APP_LOG_LEVEL_INFO, "Parsing line: '%s'", line);
+
+  char buffer[SECRET_BASE32_MAX_LEN + NAME_MAX_LEN * 2 + 32];
   strncpy(buffer, line, sizeof(buffer) - 1);
   buffer[sizeof(buffer) - 1] = '\0';
 
-  char *name = buffer;
-  char *secret = strchr(buffer, '|');
+  char *label = buffer;
+  char *account_name = strchr(buffer, '|');
+  if (!account_name) {
+    return false;
+  }
+  *account_name = '\0';
+  account_name++;
+
+  char *secret = strchr(account_name, '|');
   if (!secret) {
     return false;
   }
@@ -59,16 +74,27 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     }
   }
 
-  // Убираем пробелы
-  char *trim_ptr = name;
+  // Убираем пробелы для label
+  char *trim_ptr = label;
   while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
-  memmove(name, trim_ptr, strlen(trim_ptr) + 1);
-  trim_ptr = name + strlen(name) - 1;
-  while (trim_ptr >= name && (*trim_ptr == ' ' || *trim_ptr == '\t')) {
+  memmove(label, trim_ptr, strlen(trim_ptr) + 1);
+  trim_ptr = label + strlen(label) - 1;
+  while (trim_ptr >= label && (*trim_ptr == ' ' || *trim_ptr == '\t')) {
     *trim_ptr = '\0';
     trim_ptr--;
   }
 
+  // Убираем пробелы для account_name
+  trim_ptr = account_name;
+  while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
+  memmove(account_name, trim_ptr, strlen(trim_ptr) + 1);
+  trim_ptr = account_name + strlen(account_name) - 1;
+  while (trim_ptr >= account_name && (*trim_ptr == ' ' || *trim_ptr == '\t')) {
+    *trim_ptr = '\0';
+    trim_ptr--;
+  }
+
+  // Убираем пробелы для secret
   trim_ptr = secret;
   while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
   memmove(secret, trim_ptr, strlen(trim_ptr) + 1);
@@ -100,17 +126,23 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     }
   }
 
-  if (name[0] == '\0' || secret[0] == '\0') {
+  if (label[0] == '\0' || secret[0] == '\0') {
     return false;
   }
 
   TotpAccount account;
   memset(&account, 0, sizeof(account));
-  strncpy(account.name, name, sizeof(account.name) - 1);
+  strncpy(account.label, label, sizeof(account.label) - 1);
+  if (account_name[0] != '\0') {
+    strncpy(account.account_name, account_name, sizeof(account.account_name) - 1);
+  }
 
   uint8_t secret_bytes[SECRET_BYTES_MAX];
+  APP_LOG(APP_LOG_LEVEL_INFO, "Decoding secret: '%s'", secret);
   int decoded_len = base32_decode(secret, secret_bytes, sizeof(secret_bytes));
+  APP_LOG(APP_LOG_LEVEL_INFO, "Decoded length: %d", decoded_len);
   if (decoded_len <= 0) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to decode secret");
     return false;
   }
   account.secret_len = (size_t)decoded_len;
@@ -125,79 +157,150 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     account.digits = DEFAULT_DIGITS;
   }
 
+  APP_LOG(APP_LOG_LEVEL_INFO, "Parsed account: label='%s', account_name='%s', secret_len=%d, period=%d, digits=%d",
+           account.label, account.account_name, (int)account.secret_len, (int)account.period, (int)account.digits);
+
   *out_account = account;
   return true;
 }
 
-bool comms_parse_payload(const char *payload) {
-  if (!payload) {
+bool comms_parse_count(size_t count) {
+  s_sync_expected_count = count;
+  s_sync_received_count = 0;
+
+  // Очищаем существующие данные
+  storage_set_count(0);
+  ui_set_total_count(0);
+
+  return true;
+}
+
+bool comms_parse_account(size_t id, const char *data) {
+  if (!data) return false;
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "comms_parse_account called with id=%d, data='%s'", (int)id, data);
+  APP_LOG(APP_LOG_LEVEL_INFO, "Before: s_sync_received_count=%d, s_sync_expected_count=%d", (int)s_sync_received_count, (int)s_sync_expected_count);
+
+  TotpAccount account;
+  if (!prv_parse_line(data, &account)) {
     return false;
   }
 
-  TotpAccount new_accounts[MAX_ACCOUNTS];
-  size_t count = 0;
+  // Сохраняем аккаунт
+  if (!storage_save_account(id, &account)) {
+    return false;
+  }
 
+  s_sync_received_count++;
+  APP_LOG(APP_LOG_LEVEL_INFO, "After increment: s_sync_received_count=%d", (int)s_sync_received_count);
+
+  // Если получили все аккаунты, обновляем UI
+  if (s_sync_received_count >= s_sync_expected_count) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "All accounts received, updating UI");
+    storage_set_count(s_sync_expected_count);
+    ui_set_total_count(s_sync_expected_count);
+    APP_LOG(APP_LOG_LEVEL_INFO, "Count set to %d, calling ui_rebuild_scroll_content", (int)s_sync_expected_count);
+    ui_rebuild_scroll_content();
+    APP_LOG(APP_LOG_LEVEL_INFO, "UI rebuild complete, sending status");
+    prv_send_status(1); // успех
+  }
+
+  return true;
+}
+
+// Устаревшая функция для обратной совместимости
+bool comms_parse_payload(const char *payload) {
+  // Для старого протокола парсим все сразу
+  if (!payload) return false;
+
+  size_t count = 0;
   const char *pos = payload;
   while (*pos && count < MAX_ACCOUNTS) {
     const char *end = strchr(pos, ';');
     size_t len = end ? (size_t)(end - pos) : strlen(pos);
     if (len > 0) {
-      char line[SECRET_BASE32_MAX_LEN + NAME_MAX_LEN + 24];
-      size_t copy_len = len;
-      if (copy_len >= sizeof(line)) {
-        copy_len = sizeof(line) - 1;
-      }
+      char line[SECRET_BASE32_MAX_LEN + NAME_MAX_LEN * 2 + 32];
+      size_t copy_len = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
       memcpy(line, pos, copy_len);
       line[copy_len] = '\0';
-      if (prv_parse_line(line, &new_accounts[count])) {
+
+      TotpAccount account;
+      if (prv_parse_line(line, &account)) {
+        storage_save_account(count, &account);
         count++;
       }
     }
-    if (!end) {
-      break;
-    }
+    if (!end) break;
     pos = end + 1;
   }
 
-  if (count == 0) {
-    return false;
+  if (count > 0) {
+    storage_set_count(count);
+    ui_set_total_count(count);
+    ui_rebuild_scroll_content();
+    return true;
   }
 
-  s_account_count = count;
-  for (size_t i = 0; i < count; i++) {
-    s_accounts[i] = new_accounts[i];
-    s_counter_cache[i] = UINT64_MAX;
-    memset(s_code_cache[i], 0, sizeof(s_code_cache[i]));
-  }
-  return true;
+  return false;
 }
 
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "Inbox received");
+
+  // Проверяем новые ключи для пакетной передачи
+  Tuple *count_tuple = dict_find(iter, MESSAGE_KEY_AppKeyCount);
+  if (count_tuple) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Found count tuple, type: %d", count_tuple->type);
+    if (count_tuple->type == TUPLE_INT) {
+      size_t count = (size_t)count_tuple->value->int32;
+      APP_LOG(APP_LOG_LEVEL_INFO, "Received count: %d", (int)count);
+      comms_parse_count(count);
+      return;
+    } else if (count_tuple->type == TUPLE_UINT) {
+      size_t count = (size_t)count_tuple->value->uint16;
+      APP_LOG(APP_LOG_LEVEL_INFO, "Received count (uint): %d", (int)count);
+      comms_parse_count(count);
+      return;
+    }
+  }
+
+  Tuple *entry_tuple = dict_find(iter, MESSAGE_KEY_AppKeyEntry);
+  Tuple *id_tuple = dict_find(iter, MESSAGE_KEY_AppKeyEntryId);
+  if (entry_tuple && id_tuple) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Found entry tuples, entry type: %d, id type: %d",
+             entry_tuple->type, id_tuple->type);
+    if (entry_tuple->type == TUPLE_CSTRING && id_tuple->type == TUPLE_INT) {
+      size_t id = (size_t)id_tuple->value->int32;
+      const char *data = entry_tuple->value->cstring;
+      APP_LOG(APP_LOG_LEVEL_INFO, "Received entry %d: %s", (int)id, data);
+      comms_parse_account(id, data);
+      return;
+    }
+  }
+
+  // Старый протокол для обратной совместимости
   Tuple *payload = dict_find(iter, MESSAGE_KEY_AppKeyPayload);
   if (!payload || payload->type != TUPLE_CSTRING) {
     return;
   }
-  APP_LOG(APP_LOG_LEVEL_INFO, "Received configuration payload");
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "Received legacy payload");
   const char *payload_str = payload->value->cstring;
   if (payload_str[0] == '\0') {
-    s_account_count = 0;
-    ui_rebuild_scroll_content();
-    ui_update_codes(true);
-    storage_save_accounts();
+    // Очистка данных
+    comms_parse_count(0);
     prv_send_status(1);
     return;
   }
 
+  // Парсим старый формат
   bool parse_ok = comms_parse_payload(payload_str);
   if (!parse_ok) {
-    APP_LOG(APP_LOG_LEVEL_WARNING, "Failed to parse payload");
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Failed to parse legacy payload");
     prv_send_status(0);
     return;
   }
 
-  ui_rebuild_scroll_content();
-  ui_update_codes(true);
-  storage_save_accounts();
   prv_send_status(1);
 }
 

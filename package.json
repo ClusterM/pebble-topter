@@ -24,7 +24,10 @@
     "messageKeys": {
       "AppKeyPayload": 0,
       "AppKeyRequest": 1,
-      "AppKeyStatus": 2
+      "AppKeyStatus": 2,
+      "AppKeyCount": 3,
+      "AppKeyEntry": 4,
+      "AppKeyEntryId": 5
     },
     "capabilities": [
       "configurable"

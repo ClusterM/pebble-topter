@@ -3,72 +3,108 @@
 #include <string.h>
 
 typedef struct {
-  char name[NAME_MAX_LEN + 1];
+  char label[NAME_MAX_LEN + 1];
+  char account_name[NAME_MAX_LEN + 1];
   uint8_t secret_len;
   uint8_t secret[SECRET_BYTES_MAX];
   uint16_t period;
   uint8_t digits;
 } __attribute__((__packed__)) PersistedAccount;
 
-typedef struct {
-  uint8_t count;
-  PersistedAccount accounts[MAX_ACCOUNTS];
-} __attribute__((__packed__)) PersistedData;
-
-void storage_save_accounts(void) {
-  PersistedData data;
-  memset(&data, 0, sizeof(data));
-  data.count = (uint8_t)s_account_count;
-  for (size_t i = 0; i < s_account_count && i < MAX_ACCOUNTS; i++) {
-    PersistedAccount *dest = &data.accounts[i];
-    strncpy(dest->name, s_accounts[i].name, sizeof(dest->name) - 1);
-    dest->secret_len = (uint8_t)s_accounts[i].secret_len;
-    memcpy(dest->secret, s_accounts[i].secret, s_accounts[i].secret_len);
-    dest->period = (uint16_t)s_accounts[i].period;
-    dest->digits = s_accounts[i].digits;
+// Получить количество аккаунтов
+size_t storage_get_count(void) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: checking PERSIST_KEY_COUNT=%d", PERSIST_KEY_COUNT);
+  bool exists = persist_exists(PERSIST_KEY_COUNT);
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: persist_exists=%d", exists ? 1 : 0);
+  if (!exists) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: key does not exist, returning 0");
+    return 0;
   }
-  size_t size_to_write = sizeof(data.count) + s_account_count * sizeof(PersistedAccount);
-  persist_write_data(PERSIST_KEY_ACCOUNTS, &data, size_to_write);
+  int32_t count = persist_read_int(PERSIST_KEY_COUNT);
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: read count=%ld", (long)count);
+  return (size_t)count;
 }
 
+// Установить количество аккаунтов
+void storage_set_count(size_t count) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_set_count: setting count=%d to key %d", (int)count, PERSIST_KEY_COUNT);
+  persist_write_int(PERSIST_KEY_COUNT, count);
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_set_count: write completed");
+}
+
+// Загрузить аккаунт по ID
+bool storage_load_account(size_t id, TotpAccount *account) {
+  if (!account) return false;
+
+  uint32_t key = PERSIST_KEY_ACCOUNTS_START + id;
+  APP_LOG(APP_LOG_LEVEL_INFO, "Checking persistence key %d for account %d", (int)key, (int)id);
+  if (!persist_exists(key)) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Persistence key %d does not exist", (int)key);
+    return false;
+  }
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "Reading account %d from storage", (int)id);
+  PersistedAccount data;
+  persist_read_data(key, &data, sizeof(data));
+
+  memset(account, 0, sizeof(*account));
+  strncpy(account->label, data.label, sizeof(account->label) - 1);
+  strncpy(account->account_name, data.account_name, sizeof(account->account_name) - 1);
+  account->secret_len = data.secret_len;
+  if (account->secret_len > SECRET_BYTES_MAX) {
+    account->secret_len = SECRET_BYTES_MAX;
+  }
+  memcpy(account->secret, data.secret, account->secret_len);
+  account->period = data.period > 0 ? data.period : DEFAULT_PERIOD;
+  account->digits = data.digits >= MIN_DIGITS && data.digits <= MAX_DIGITS ? data.digits : DEFAULT_DIGITS;
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "Account %d loaded: label='%s', account_name='%s', secret_len=%d, digits=%d, period=%d",
+           (int)id, account->label, account->account_name, (int)account->secret_len, (int)account->digits, (int)account->period);
+  return true;
+}
+
+// Сохранить аккаунт по ID
+bool storage_save_account(size_t id, const TotpAccount *account) {
+  if (!account) return false;
+
+  PersistedAccount data;
+  memset(&data, 0, sizeof(data));
+  strncpy(data.label, account->label, sizeof(data.label) - 1);
+  strncpy(data.account_name, account->account_name, sizeof(data.account_name) - 1);
+  data.secret_len = account->secret_len;
+  memcpy(data.secret, account->secret, account->secret_len);
+  data.period = account->period;
+  data.digits = account->digits;
+
+  uint32_t key = PERSIST_KEY_ACCOUNTS_START + id;
+  return persist_write_data(key, &data, sizeof(data)) == sizeof(data);
+}
+
+// Удалить аккаунт по ID
+void storage_delete_account(size_t id) {
+  uint32_t key = PERSIST_KEY_ACCOUNTS_START + id;
+  persist_delete(key);
+}
+
+// Загрузка всех аккаунтов (для обратной совместимости)
 void storage_load_accounts(void) {
-  if (!persist_exists(PERSIST_KEY_ACCOUNTS)) {
-    s_account_count = 0;
-    return;
-  }
-  int stored_size = persist_get_size(PERSIST_KEY_ACCOUNTS);
-  if (stored_size < (int)sizeof(uint8_t)) {
-    s_account_count = 0;
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: starting");
+  // Проверяем новую систему хранения
+  size_t count = storage_get_count();
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: got count=%d", (int)count);
+  if (count > 0) {
+    s_total_account_count = count;
+    APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: set s_total_account_count=%d", (int)s_total_account_count);
     return;
   }
 
-  uint8_t buffer[sizeof(PersistedData)];
-  if (stored_size > (int)sizeof(buffer)) {
-    stored_size = sizeof(buffer);
-  }
-  persist_read_data(PERSIST_KEY_ACCOUNTS, buffer, stored_size);
-  PersistedData *data = (PersistedData *)buffer;
-  size_t count = data->count;
-  if (count > MAX_ACCOUNTS) {
-    count = MAX_ACCOUNTS;
-  }
+  // Если новая система пуста, пробуем загрузить из старой
+  // (здесь можно добавить логику миграции)
+  s_total_account_count = 0;
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: no accounts found, set s_total_account_count=0");
+}
 
-  for (size_t i = 0; i < count; i++) {
-    PersistedAccount *src = &data->accounts[i];
-    TotpAccount *dst = &s_accounts[i];
-    memset(dst, 0, sizeof(*dst));
-    strncpy(dst->name, src->name, sizeof(dst->name) - 1);
-    dst->secret_len = src->secret_len;
-    if (dst->secret_len > SECRET_BYTES_MAX) {
-      dst->secret_len = SECRET_BYTES_MAX;
-    }
-    memcpy(dst->secret, src->secret, dst->secret_len);
-    dst->period = src->period > 0 ? src->period : DEFAULT_PERIOD;
-    dst->digits = src->digits >= MIN_DIGITS && src->digits <= MAX_DIGITS ? src->digits : DEFAULT_DIGITS;
-  }
-  s_account_count = count;
-  for (size_t i = 0; i < MAX_ACCOUNTS; i++) {
-    s_counter_cache[i] = UINT64_MAX;
-    memset(s_code_cache[i], 0, sizeof(s_code_cache[i]));
-  }
+// Сохранение всех аккаунтов (для обратной совместимости - не используется в новой архитектуре)
+void storage_save_accounts(void) {
+  // Новая архитектура сохраняет аккаунты индивидуально
 }

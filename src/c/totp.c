@@ -23,6 +23,53 @@ static int prv_base32_value(char c) {
   return -1;
 }
 
+static char prv_base32_char(int val) {
+  if (val >= 0 && val <= 25) {
+    return (char)('A' + val);
+  }
+  if (val >= 26 && val <= 31) {
+    return (char)('2' + (val - 26));
+  }
+  return '=';
+}
+
+int base32_encode(const uint8_t *input, size_t input_len, char *output, size_t output_max) {
+  if (!input || !output || output_max == 0) {
+    return -1;
+  }
+
+  size_t output_len = 0;
+  size_t i = 0;
+
+  while (i < input_len) {
+    // Получаем 5 байт (40 бит) или меньше
+    uint64_t buffer = 0;
+    int bits = 0;
+
+    for (int j = 0; j < 5 && i < input_len; j++) {
+      buffer = (buffer << 8) | input[i++];
+      bits += 8;
+    }
+
+    // Кодируем в 8 символов base32
+    for (int j = 35; j >= 0 && output_len < output_max; j -= 5) {
+      if (bits >= 5) {
+        int val = (buffer >> j) & 0x1F;
+        output[output_len++] = prv_base32_char(val);
+        bits -= 5;
+      } else if (output_len < output_max) {
+        output[output_len++] = '=';
+      }
+    }
+  }
+
+  if (output_len < output_max) {
+    output[output_len] = '\0';
+  }
+
+  return (int)output_len;
+}
+
 int base32_decode(const char *input, uint8_t *output, size_t output_max) {
   int buffer = 0;
   int bits_left = 0;
@@ -200,7 +247,9 @@ bool totp_generate(const TotpAccount *account, time_t now, char *output, size_t 
   uint32_t period = account->period > 0 ? account->period : DEFAULT_PERIOD;
   uint8_t digits = account->digits >= MIN_DIGITS && account->digits <= MAX_DIGITS ? account->digits : DEFAULT_DIGITS;
 
+  APP_LOG(APP_LOG_LEVEL_INFO, "totp_generate: now=%ld, period=%d", (long)now, (int)period);
   uint64_t counter = (uint64_t)(now / period);
+  APP_LOG(APP_LOG_LEVEL_INFO, "totp_generate: counter=%llu", counter);
   uint8_t message[8];
   for (int i = 7; i >= 0; i--) {
     message[i] = (uint8_t)(counter & 0xFF);

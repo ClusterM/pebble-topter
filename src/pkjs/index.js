@@ -30,6 +30,7 @@ const CONFIG_HTML = `
   <p class="hint">Enter secrets manually or paste otpauth URLs. Default period/digits: 30 / 6.</p>
   <div id="entries"></div>
   <div class="actions">
+    <button id="test-log" class="secondary">Test Log</button>
     <button id="add-entry" class="secondary">Add Entry</button>
     <button id="save" class="primary">Save</button>
     <button id="reset" class="danger">Clear All</button>
@@ -37,6 +38,7 @@ const CONFIG_HTML = `
 
   <script>
   (function() {
+    console.log('[Totper] Script started');
     var initialData = decodeURIComponent('__INITIAL_DATA__');
     var entries = [];
     console.log('[Totper] Initial data length:', initialData ? initialData.length : 0);
@@ -60,8 +62,10 @@ const CONFIG_HTML = `
       container.dataset.index = index;
 
       container.innerHTML = [
-        '<label>Account Name</label>',
-        '<input type="text" name="name" placeholder="e.g. Email" value="' + (entry.name || '') + '" maxlength="32" required>',
+        '<label>Label</label>',
+        '<input type="text" name="label" placeholder="e.g. Google" value="' + (entry.label || '') + '" maxlength="32" required>',
+        '<label>Account Name (optional)</label>',
+        '<input type="text" name="account_name" placeholder="e.g. user@gmail.com" value="' + (entry.account_name || '') + '" maxlength="32">',
         '<label>Secret (Base32)</label>',
         '<input type="text" name="secret" placeholder="JBSWY3DPEHPK3PXP" value="' + (entry.secret || '') + '" maxlength="64" required>',
         '<div class="inline">',
@@ -102,11 +106,12 @@ const CONFIG_HTML = `
       var nodes = entriesRoot.querySelectorAll('.entry');
       var result = [];
       Array.prototype.forEach.call(nodes, function(node) {
-        var name = node.querySelector('input[name="name"]').value.trim();
+        var label = node.querySelector('input[name="label"]').value.trim();
+        var account_name = node.querySelector('input[name="account_name"]').value.trim();
         var secret = node.querySelector('input[name="secret"]').value.replace(/\\s+/g, '').toUpperCase();
         var period = parseInt(node.querySelector('input[name="period"]').value, 10);
         var digits = parseInt(node.querySelector('input[name="digits"]').value, 10);
-        if (!name || !secret) {
+        if (!label || !secret) {
           return;
         }
         if (!period || period < 1 || period > 120) {
@@ -115,16 +120,17 @@ const CONFIG_HTML = `
         if (!digits || digits < 6 || digits > 8) {
           digits = 6;
         }
-        name = name.replace(/[|;]/g, ' ');
+        label = label.replace(/[|;]/g, ' ');
+        account_name = account_name.replace(/[|;]/g, ' ');
         secret = secret.replace(/[^A-Z2-7=]/g, '');
-        result.push({ name: name, secret: secret, period: period, digits: digits });
+        result.push({ label: label, account_name: account_name, secret: secret, period: period, digits: digits });
       });
       return result;
     }
 
     function buildPayload(list) {
       return list.map(function(item) {
-        return [item.name, item.secret, item.period, item.digits].join('|');
+        return [item.label, item.account_name, item.secret, item.period, item.digits].join('|');
       }).join(';');
     }
 
@@ -152,34 +158,49 @@ const CONFIG_HTML = `
           digits = 6;
         }
         var issuer = params.get('issuer');
+        var final_label = issuer || 'TOTP';
+        var final_account_name = label;
         if (issuer && label.indexOf(':') === -1) {
-          label = issuer + ' (' + label + ')';
+          final_account_name = label;
         }
-        label = label.replace(/[|;]/g, ' ');
-        return { name: label, secret: secret, period: period, digits: digits };
+        final_label = final_label.replace(/[|;]/g, ' ');
+        final_account_name = final_account_name.replace(/[|;]/g, ' ');
+        return { label: final_label, account_name: final_account_name, secret: secret, period: period, digits: digits };
       } catch (err) {
         console.log('Invalid OTP URI', err);
         return null;
       }
     }
 
+    document.getElementById('test-log').addEventListener('click', function() {
+      console.log('[Totper] Test log button clicked');
+      console.log('[Totper] Current entries:', entries);
+      var list = readEntriesFromDom();
+      console.log('[Totper] DOM entries:', list);
+    });
+
     document.getElementById('add-entry').addEventListener('click', function() {
-      entries.push({ name: '', secret: '', period: 30, digits: 6 });
+      entries.push({ label: '', account_name: '', secret: '', period: 30, digits: 6 });
       renderEntries();
     });
 
     document.getElementById('save').addEventListener('click', function() {
+      console.log('[Totper] Save button clicked');
       var list = readEntriesFromDom();
+      console.log('[Totper] Read entries:', list.length);
       if (!list.length) {
         alert('Add at least one entry first.');
         return;
       }
       var payload = buildPayload(list);
+      console.log('[Totper] Built payload:', payload);
       var result = {
         entries: list,
         payload: payload
       };
-      window.location = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
+      var url = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
+      console.log('[Totper] Closing with URL:', url);
+      window.location = url;
     });
 
     document.getElementById('reset').addEventListener('click', function() {
@@ -190,6 +211,7 @@ const CONFIG_HTML = `
     });
 
     renderEntries();
+    console.log('[Totper] Initialization complete');
   })();
   </script>
 </body>
@@ -203,10 +225,74 @@ function buildConfigUrl(initialEntries) {
 }
 
 function sendPayloadToWatch(payload) {
+  console.log('[Totper] sendPayloadToWatch called with payload:', payload);
   return new Promise((resolve, reject) => {
+    // Если payload пустой, отправляем команду очистки
+    if (!payload || payload.trim() === '') {
+      console.log('[Totper] Sending empty payload');
+      Pebble.sendAppMessage(
+        { AppKeyPayload: '' },
+        () => {
+          console.log('[Totper] Empty payload sent successfully');
+          resolve();
+        },
+        err => {
+          console.log('[Totper] Failed to send empty payload:', err);
+          reject(err);
+        }
+      );
+      return;
+    }
+
+    // Разбираем payload на отдельные записи
+    const entries = payload.split(';').filter(entry => entry.trim() !== '');
+    console.log('[Totper] Parsed entries:', entries);
+
+    // Сначала отправляем количество записей
+    console.log('[Totper] Sending count:', entries.length);
     Pebble.sendAppMessage(
-      { AppKeyPayload: payload },
-      () => resolve(),
+      { AppKeyCount: entries.length },
+      () => {
+        console.log('[Totper] Count sent successfully');
+
+        // Затем отправляем каждую запись отдельно с задержкой
+        let sentCount = 0;
+        const totalCount = entries.length;
+
+        if (totalCount === 0) {
+          resolve();
+          return;
+        }
+
+        function sendNextEntry(index) {
+          if (index >= totalCount) {
+            console.log('[Totper] All entries sent, resolving');
+            resolve();
+            return;
+          }
+
+          console.log('[Totper] Sending entry', index, ':', entries[index].trim());
+          Pebble.sendAppMessage(
+            {
+              AppKeyEntryId: index,
+              AppKeyEntry: entries[index].trim()
+            },
+            () => {
+              console.log('[Totper] Entry', index, 'sent successfully');
+              sentCount++;
+              // Отправляем следующий через 100ms
+              setTimeout(() => sendNextEntry(index + 1), 100);
+            },
+            err => {
+              console.log('[Totper] Failed to send entry', index, ':', err);
+              reject(err);
+            }
+          );
+        }
+
+        // Начинаем отправку первой записи через 200ms после count
+        setTimeout(() => sendNextEntry(0), 200);
+      },
       err => reject(err)
     );
   });
@@ -218,28 +304,30 @@ function requestResend() {
 
 Pebble.addEventListener('ready', () => {
   console.log('Totper ready');
-  const storedPayload = localStorage.getItem('totperConfigPayload') || '';
-  if (storedPayload) {
-    sendPayloadToWatch(storedPayload).catch(err => {
-      console.log('Failed to send stored payload', err);
-    });
-  } else {
-    requestResend();
-  }
+  // Не отправляем автоматически старые данные при запуске
+  // Они будут отправлены только при явном сохранении
+  requestResend();
 });
 
 Pebble.addEventListener('showConfiguration', () => {
+  console.log('[Totper] showConfiguration called');
   const storedEntries = localStorage.getItem('totperConfigEntries') || '';
-  Pebble.openURL(buildConfigUrl(storedEntries));
+  console.log('[Totper] storedEntries:', storedEntries);
+  const url = buildConfigUrl(storedEntries);
+  console.log('[Totper] Opening URL:', url);
+  Pebble.openURL(url);
 });
 
 Pebble.addEventListener('webviewclosed', e => {
+  console.log('[Totper] webviewclosed called', e);
   if (!e || !e.response) {
+    console.log('[Totper] No response in webviewclosed');
     return;
   }
   let data;
   try {
     data = JSON.parse(decodeURIComponent(e.response));
+    console.log('[Totper] Parsed data:', data);
   } catch (err) {
     console.log('Failed to parse config response', err);
     return;
@@ -265,15 +353,14 @@ Pebble.addEventListener('webviewclosed', e => {
 });
 
 Pebble.addEventListener('appmessage', e => {
+  console.log('[Totper] Received appmessage:', e);
   const payload = e.payload || {};
   if (payload.AppKeyRequest) {
-    const storedPayload = localStorage.getItem('totperConfigPayload') || '';
-    if (storedPayload) {
-      sendPayloadToWatch(storedPayload).catch(err => console.log('sync failed', err));
-    }
+    console.log('[Totper] Received AppKeyRequest - ignoring for unidirectional sync');
+    // Для unidirectional sync не отправляем данные автоматически
   }
   if (payload.AppKeyStatus !== undefined) {
-    console.log('Watch status: ' + payload.AppKeyStatus);
+    console.log('[Totper] Watch status:', payload.AppKeyStatus);
   }
 });
 
