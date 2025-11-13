@@ -199,10 +199,8 @@ bool comms_parse_account(size_t id, const char *data) {
     APP_LOG(APP_LOG_LEVEL_INFO, "All accounts received, updating UI");
     storage_set_count(s_sync_expected_count);
     ui_set_total_count(s_sync_expected_count);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Count set to %d, calling ui_rebuild_scroll_content", (int)s_sync_expected_count);
-    ui_rebuild_scroll_content();
-    APP_LOG(APP_LOG_LEVEL_INFO, "UI rebuild complete, sending status");
-    prv_send_status(1); // успех
+    APP_LOG(APP_LOG_LEVEL_INFO, "UI updated with %d accounts, sending status", (int)s_sync_expected_count);
+    prv_send_status(1); // success
   }
 
   return true;
