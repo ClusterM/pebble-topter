@@ -11,7 +11,7 @@ typedef struct {
   uint8_t digits;
 } __attribute__((__packed__)) PersistedAccount;
 
-// Получить количество аккаунтов
+// Get account count
 size_t storage_get_count(void) {
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_get_count: checking PERSIST_KEY_COUNT=%d", PERSIST_KEY_COUNT);
   bool exists = persist_exists(PERSIST_KEY_COUNT);
@@ -25,14 +25,14 @@ size_t storage_get_count(void) {
   return (size_t)count;
 }
 
-// Установить количество аккаунтов
+// Set account count
 void storage_set_count(size_t count) {
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_set_count: setting count=%d to key %d", (int)count, PERSIST_KEY_COUNT);
   persist_write_int(PERSIST_KEY_COUNT, count);
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_set_count: write completed");
 }
 
-// Загрузить аккаунт по ID
+// Load account by ID
 bool storage_load_account(size_t id, TotpAccount *account) {
   if (!account) return false;
 
@@ -63,7 +63,7 @@ bool storage_load_account(size_t id, TotpAccount *account) {
   return true;
 }
 
-// Сохранить аккаунт по ID
+// Save account by ID
 bool storage_save_account(size_t id, const TotpAccount *account) {
   if (!account) return false;
 
@@ -80,31 +80,18 @@ bool storage_save_account(size_t id, const TotpAccount *account) {
   return persist_write_data(key, &data, sizeof(data)) == sizeof(data);
 }
 
-// Удалить аккаунт по ID
+// Delete account by ID
 void storage_delete_account(size_t id) {
   uint32_t key = PERSIST_KEY_ACCOUNTS_START + id;
   persist_delete(key);
 }
 
-// Загрузка всех аккаунтов (для обратной совместимости)
+// Load account count from storage
 void storage_load_accounts(void) {
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: starting");
-  // Проверяем новую систему хранения
   size_t count = storage_get_count();
   APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: got count=%d", (int)count);
-  if (count > 0) {
-    s_total_account_count = count;
-    APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: set s_total_account_count=%d", (int)s_total_account_count);
-    return;
-  }
-
-  // Если новая система пуста, пробуем загрузить из старой
-  // (здесь можно добавить логику миграции)
-  s_total_account_count = 0;
-  APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: no accounts found, set s_total_account_count=0");
+  s_total_account_count = count;
+  APP_LOG(APP_LOG_LEVEL_INFO, "storage_load_accounts: set s_total_account_count=%d", (int)s_total_account_count);
 }
 
-// Сохранение всех аккаунтов (для обратной совместимости - не используется в новой архитектуре)
-void storage_save_accounts(void) {
-  // Новая архитектура сохраняет аккаунты индивидуально
-}

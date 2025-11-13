@@ -1,12 +1,12 @@
 {
-  "name": "Totper",
+  "name": "TOTPer",
   "author": "Alexey Cluster",
   "version": "1.0.0",
   "keywords": ["pebble-app", "totp", "authenticator"],
   "private": true,
   "dependencies": {},
   "pebble": {
-    "displayName": "Totper",
+    "displayName": "TOTPer",
     "uuid": "2d7bf2bd-0f27-46ba-b2e5-d9fd5a59a878",
     "sdkVersion": "3",
     "enableMultiJS": true,
@@ -22,7 +22,6 @@
       "watchface": false
     },
     "messageKeys": {
-      "AppKeyPayload": 0,
       "AppKeyRequest": 1,
       "AppKeyStatus": 2,
       "AppKeyCount": 3,

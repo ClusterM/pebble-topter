@@ -22,11 +22,11 @@ typedef struct {
   uint8_t digits;
 } TotpAccount;
 
-// Генерация TOTP кода
+// Generate TOTP code
 bool totp_generate(const TotpAccount *account, time_t now, char *output, size_t output_len, uint64_t *out_counter);
 
-// Декодирование base32 секрета
+// Decode base32 secret
 int base32_decode(const char *input, uint8_t *output, size_t output_max);
 
-// Кодирование в base32
+// Encode to base32
 int base32_encode(const uint8_t *input, size_t input_len, char *output, size_t output_max);

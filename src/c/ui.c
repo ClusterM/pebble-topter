@@ -3,7 +3,7 @@
 #include "storage.h"
 #include <string.h>
 
-// Глобальные переменные UI
+// UI global variables
 Window *s_window;
 ScrollLayer *s_scroll_layer;
 Layer *s_container_layer;
@@ -13,7 +13,7 @@ AccountView *s_account_views;
 size_t s_visible_start;
 size_t s_visible_count;
 
-// Освободить память аккаунта
+// Free account memory
 static void prv_free_account(AccountView *view) {
   if (view->account) {
     free(view->account);
@@ -21,9 +21,9 @@ static void prv_free_account(AccountView *view) {
   }
 }
 
-// Загрузить аккаунт в память
+// Load account into memory
 static bool prv_load_account(AccountView *view) {
-  if (view->account) return true; // уже загружен
+  if (view->account) return true; // already loaded
 
   APP_LOG(APP_LOG_LEVEL_INFO, "Allocating memory for account %d", (int)view->id);
   view->account = malloc(sizeof(TotpAccount));
@@ -43,12 +43,12 @@ static bool prv_load_account(AccountView *view) {
   return true;
 }
 
-// Выгрузить аккаунт из памяти
+// Unload account from memory
 static void prv_unload_account(AccountView *view) {
   prv_free_account(view);
 }
 
-// Освободить все UI элементы
+// Free all UI elements
 static void prv_destroy_account_views(void) {
   if (!s_account_views) return;
 
@@ -114,7 +114,7 @@ void ui_rebuild_scroll_content(void) {
     return;
   }
 
-  // Создаем массив видимых view (для простоты показываем все, но в будущем можно оптимизировать)
+  // Create array of visible views (for simplicity show all, but can be optimized in future)
   s_visible_count = s_total_account_count;
   s_visible_start = 0;
 
@@ -138,16 +138,16 @@ void ui_rebuild_scroll_content(void) {
 
     APP_LOG(APP_LOG_LEVEL_INFO, "Loading account %d", (int)global_index);
 
-    // Пытаемся загрузить аккаунт
+    // Try to load account
     if (!prv_load_account(view)) {
       APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to load account %d", (int)global_index);
-      // Если не удалось загрузить, пропускаем
+      // If failed to load, skip
       continue;
     }
 
     APP_LOG(APP_LOG_LEVEL_INFO, "Account %d loaded successfully: %s", (int)global_index, view->account->label);
 
-    // Label (основная метка)
+    // Label (main label)
     GRect label_frame = GRect(4, y, width - 8, 20);
     view->label_layer = text_layer_create(label_frame);
     text_layer_set_font(view->label_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
@@ -159,7 +159,7 @@ void ui_rebuild_scroll_content(void) {
 
     y += 20;
 
-    // Account name (если есть)
+    // Account name (if present)
     if (view->account->account_name[0] != '\0') {
       GRect account_name_frame = GRect(4, y, width - 8, 16);
       view->account_name_layer = text_layer_create(account_name_frame);
@@ -231,7 +231,7 @@ void ui_update_codes(void) {
     }
 
     APP_LOG(APP_LOG_LEVEL_INFO, "Generated code: '%s' (len=%d)", view->code, (int)strlen(view->code));
-    // Логируем каждый символ в hex для отладки
+    // Log each character in hex for debugging
     // for (size_t j = 0; j < strlen(view->code) && j < 10; j++) {
     //   APP_LOG(APP_LOG_LEVEL_INFO, "view->code[%d] = '%c' (0x%02x)", j, view->code[j], (unsigned char)view->code[j]);
     // }
@@ -257,28 +257,28 @@ void ui_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   ui_update_codes();
 }
 
-// Установить общее количество аккаунтов
+// Set total account count
 void ui_set_total_count(size_t count) {
   APP_LOG(APP_LOG_LEVEL_INFO, "ui_set_total_count called with %d", (int)count);
   s_total_account_count = count;
   APP_LOG(APP_LOG_LEVEL_INFO, "s_total_account_count set to %d", (int)s_total_account_count);
 }
 
-// Загрузить аккаунт по индексу (для отображения)
+// Load account at index (for display)
 void ui_load_account_at_index(size_t index) {
   if (!s_account_views || index >= s_visible_count) return;
   prv_load_account(&s_account_views[index]);
 }
 
-// Выгрузить аккаунт по индексу (освободить память)
+// Unload account at index (free memory)
 void ui_unload_account_at_index(size_t index) {
   if (!s_account_views || index >= s_visible_count) return;
   prv_unload_account(&s_account_views[index]);
 }
 
-// Обработчик прокрутки (пока заглушка)
+// Scroll handler (placeholder for now)
 void ui_scroll_handler(ClickRecognizerRef recognizer, void *context) {
-  // TODO: реализовать lazy loading при прокрутке
+  // TODO: implement lazy loading on scroll
 }
 
 static void prv_window_load(Window *window) {
@@ -316,7 +316,7 @@ static void prv_window_unload(Window *window) {
 }
 
 void ui_init(void) {
-  // Инициализируем счетчики (не сбрасываем s_total_account_count, он уже установлен)
+  // Initialize counters (don't reset s_total_account_count, it's already set)
   s_visible_start = 0;
   s_visible_count = 0;
   s_account_views = NULL;

@@ -42,7 +42,7 @@ int base32_encode(const uint8_t *input, size_t input_len, char *output, size_t o
   size_t i = 0;
 
   while (i < input_len) {
-    // Получаем 5 байт (40 бит) или меньше
+    // Get 5 bytes (40 bits) or less
     uint64_t buffer = 0;
     int bits = 0;
 
@@ -51,7 +51,7 @@ int base32_encode(const uint8_t *input, size_t input_len, char *output, size_t o
       bits += 8;
     }
 
-    // Кодируем в 8 символов base32
+    // Encode into 8 base32 characters
     for (int j = 35; j >= 0 && output_len < output_max; j -= 5) {
       if (bits >= 5) {
         int val = (buffer >> j) & 0x1F;

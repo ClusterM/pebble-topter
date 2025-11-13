@@ -3,19 +3,19 @@
 #include <pebble.h>
 #include "totp.h"
 
-// Инициализация связи с телефоном
+// Initialize phone communication
 void comms_init(void);
 
-// Деинициализация связи
+// Deinitialize communication
 void comms_deinit(void);
 
-// Отправка запроса на синхронизацию
+// Send sync request
 void comms_request_sync(void);
 
-// Функции отправки данных с часов на телефон не используются (односторонняя синхронизация)
+// Data sending functions from watch to phone are not used (unidirectional sync)
 
-// Парсинг количества аккаунтов
+// Parse account count
 bool comms_parse_count(size_t count);
 
-// Парсинг отдельного аккаунта
+// Parse individual account
 bool comms_parse_account(size_t id, const char *data);

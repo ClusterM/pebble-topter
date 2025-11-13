@@ -6,7 +6,7 @@
 // === App lifecycle ==========================================================
 
 static void prv_init(void) {
-  // Загружаем количество аккаунтов
+  // Load account count
   storage_load_accounts();
   ui_set_total_count(s_total_account_count);
 

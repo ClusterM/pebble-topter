@@ -5,7 +5,7 @@
 #include "message_keys.auto.h"
 #include <string.h>
 
-// Состояние синхронизации
+// Sync state
 static size_t s_sync_expected_count = 0;
 static size_t s_sync_received_count = 0;
 
@@ -74,7 +74,7 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     }
   }
 
-  // Убираем пробелы для label
+  // Trim spaces for label
   char *trim_ptr = label;
   while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
   memmove(label, trim_ptr, strlen(trim_ptr) + 1);
@@ -84,7 +84,7 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     trim_ptr--;
   }
 
-  // Убираем пробелы для account_name
+  // Trim spaces for account_name
   trim_ptr = account_name;
   while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
   memmove(account_name, trim_ptr, strlen(trim_ptr) + 1);
@@ -94,7 +94,7 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     trim_ptr--;
   }
 
-  // Убираем пробелы для secret
+  // Trim spaces for secret
   trim_ptr = secret;
   while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
   memmove(secret, trim_ptr, strlen(trim_ptr) + 1);
@@ -186,7 +186,7 @@ bool comms_parse_account(size_t id, const char *data) {
     return false;
   }
 
-  // Сохраняем аккаунт
+  // Save account
   if (!storage_save_account(id, &account)) {
     return false;
   }
@@ -194,7 +194,7 @@ bool comms_parse_account(size_t id, const char *data) {
   s_sync_received_count++;
   APP_LOG(APP_LOG_LEVEL_INFO, "After increment: s_sync_received_count=%d", (int)s_sync_received_count);
 
-  // Если получили все аккаунты, обновляем UI
+  // If all accounts received, update UI
   if (s_sync_received_count >= s_sync_expected_count) {
     APP_LOG(APP_LOG_LEVEL_INFO, "All accounts received, updating UI");
     storage_set_count(s_sync_expected_count);
@@ -208,41 +208,6 @@ bool comms_parse_account(size_t id, const char *data) {
   return true;
 }
 
-// Устаревшая функция для обратной совместимости
-bool comms_parse_payload(const char *payload) {
-  // Для старого протокола парсим все сразу
-  if (!payload) return false;
-
-  size_t count = 0;
-  const char *pos = payload;
-  while (*pos && count < MAX_ACCOUNTS) {
-    const char *end = strchr(pos, ';');
-    size_t len = end ? (size_t)(end - pos) : strlen(pos);
-    if (len > 0) {
-      char line[SECRET_BASE32_MAX_LEN + NAME_MAX_LEN * 2 + 32];
-      size_t copy_len = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
-      memcpy(line, pos, copy_len);
-      line[copy_len] = '\0';
-
-      TotpAccount account;
-      if (prv_parse_line(line, &account)) {
-        storage_save_account(count, &account);
-        count++;
-      }
-    }
-    if (!end) break;
-    pos = end + 1;
-  }
-
-  if (count > 0) {
-    storage_set_count(count);
-    ui_set_total_count(count);
-    ui_rebuild_scroll_content();
-    return true;
-  }
-
-  return false;
-}
 
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   APP_LOG(APP_LOG_LEVEL_INFO, "Inbox received");
@@ -277,31 +242,6 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
       return;
     }
   }
-
-  // Старый протокол для обратной совместимости
-  Tuple *payload = dict_find(iter, MESSAGE_KEY_AppKeyPayload);
-  if (!payload || payload->type != TUPLE_CSTRING) {
-    return;
-  }
-
-  APP_LOG(APP_LOG_LEVEL_INFO, "Received legacy payload");
-  const char *payload_str = payload->value->cstring;
-  if (payload_str[0] == '\0') {
-    // Очистка данных
-    comms_parse_count(0);
-    prv_send_status(1);
-    return;
-  }
-
-  // Парсим старый формат
-  bool parse_ok = comms_parse_payload(payload_str);
-  if (!parse_ok) {
-    APP_LOG(APP_LOG_LEVEL_WARNING, "Failed to parse legacy payload");
-    prv_send_status(0);
-    return;
-  }
-
-  prv_send_status(1);
 }
 
 static void prv_inbox_dropped(AppMessageResult reason, void *context) {

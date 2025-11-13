@@ -6,48 +6,48 @@
 #define MAX_DIGITS 8
 
 typedef struct {
-  size_t id;  // ID аккаунта в storage
-  TotpAccount *account;  // указатель на загруженный аккаунт (NULL если не загружен)
-  char code[9];  // буфер для TOTP кода (макс 8 цифр + null)
+  size_t id;  // Account ID in storage
+  TotpAccount *account;  // Pointer to loaded account (NULL if not loaded)
+  char code[9];  // Buffer for TOTP code (max 8 digits + null)
   TextLayer *label_layer;
   TextLayer *account_name_layer;
   TextLayer *code_layer;
   TextLayer *detail_layer;
 } AccountView;
 
-// Глобальные переменные UI
+// UI global variables
 extern Window *s_window;
 extern ScrollLayer *s_scroll_layer;
 extern Layer *s_container_layer;
 extern TextLayer *s_empty_layer;
-extern size_t s_total_account_count;  // общее количество аккаунтов
-extern AccountView *s_account_views;  // динамический массив
-extern size_t s_visible_start;  // индекс первого видимого аккаунта
-extern size_t s_visible_count;  // количество видимых аккаунтов
+extern size_t s_total_account_count;  // total account count
+extern AccountView *s_account_views;  // dynamic array
+extern size_t s_visible_start;  // index of first visible account
+extern size_t s_visible_count;  // number of visible accounts
 
-// Инициализация UI
+// UI initialization
 void ui_init(void);
 
-// Деинициализация UI
+// UI deinitialization
 void ui_deinit(void);
 
-// Установить общее количество аккаунтов
+// Set total account count
 void ui_set_total_count(size_t count);
 
-// Загрузить аккаунт по индексу (для отображения)
+// Load account at index (for display)
 void ui_load_account_at_index(size_t index);
 
-// Выгрузить аккаунт по индексу (освободить память)
+// Unload account at index (free memory)
 void ui_unload_account_at_index(size_t index);
 
-// Обновление кодов для видимых аккаунтов
+// Update codes for visible accounts
 void ui_update_codes(void);
 
-// Перестроение содержимого скролла
+// Rebuild scroll content
 void ui_rebuild_scroll_content(void);
 
-// Обработчик тика (обновление каждую секунду)
+// Tick handler (update every second)
 void ui_tick_handler(struct tm *tick_time, TimeUnits units_changed);
 
-// Обработчик прокрутки
+// Scroll handler
 void ui_scroll_handler(ClickRecognizerRef recognizer, void *context);

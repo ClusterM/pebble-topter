@@ -4,7 +4,7 @@ const CONFIG_HTML = `
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Totper Settings</title>
+<title>TOTPer Settings</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 16px; background: #121212; color: #f5f5f5; }
     h1 { font-size: 22px; margin: 0 0 12px; }
@@ -26,7 +26,7 @@ const CONFIG_HTML = `
     .hint { font-size: 13px; color: #b0bec5; margin-bottom: 16px; }
     a { color: #4caf50; }
   </style>
-  <h1>Totper</h1>
+  <h1>TOTPer</h1>
   <p class="hint">Enter secrets manually or paste otpauth URLs. Default period/digits: 30 / 6.</p>
   <div id="entries"></div>
   <div class="actions">
@@ -38,10 +38,10 @@ const CONFIG_HTML = `
 
   <script>
   (function() {
-    console.log('[Totper] Script started');
+    console.log('[TOTPer] Script started');
     var initialData = decodeURIComponent('__INITIAL_DATA__');
     var entries = [];
-    console.log('[Totper] Initial data length:', initialData ? initialData.length : 0);
+    console.log('[TOTPer] Initial data length:', initialData ? initialData.length : 0);
     try {
       if (initialData) {
         var parsed = JSON.parse(initialData);
@@ -173,10 +173,10 @@ const CONFIG_HTML = `
     }
 
     document.getElementById('test-log').addEventListener('click', function() {
-      console.log('[Totper] Test log button clicked');
-      console.log('[Totper] Current entries:', entries);
+      console.log('[TOTPer] Test log button clicked');
+      console.log('[TOTPer] Current entries:', entries);
       var list = readEntriesFromDom();
-      console.log('[Totper] DOM entries:', list);
+      console.log('[TOTPer] DOM entries:', list);
     });
 
     document.getElementById('add-entry').addEventListener('click', function() {
@@ -185,21 +185,21 @@ const CONFIG_HTML = `
     });
 
     document.getElementById('save').addEventListener('click', function() {
-      console.log('[Totper] Save button clicked');
+      console.log('[TOTPer] Save button clicked');
       var list = readEntriesFromDom();
-      console.log('[Totper] Read entries:', list.length);
+      console.log('[TOTPer] Read entries:', list.length);
       if (!list.length) {
         alert('Add at least one entry first.');
         return;
       }
       var payload = buildPayload(list);
-      console.log('[Totper] Built payload:', payload);
+      console.log('[TOTPer] Built payload:', payload);
       var result = {
         entries: list,
         payload: payload
       };
       var url = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
-      console.log('[Totper] Closing with URL:', url);
+      console.log('[TOTPer] Closing with URL:', url);
       window.location = url;
     });
 
@@ -211,7 +211,7 @@ const CONFIG_HTML = `
     });
 
     renderEntries();
-    console.log('[Totper] Initialization complete');
+    console.log('[TOTPer] Initialization complete');
   })();
   </script>
 </body>
@@ -225,37 +225,20 @@ function buildConfigUrl(initialEntries) {
 }
 
 function sendPayloadToWatch(payload) {
-  console.log('[Totper] sendPayloadToWatch called with payload:', payload);
+  console.log('[TOTPer] sendPayloadToWatch called with payload:', payload);
   return new Promise((resolve, reject) => {
-    // Если payload пустой, отправляем команду очистки
-    if (!payload || payload.trim() === '') {
-      console.log('[Totper] Sending empty payload');
-      Pebble.sendAppMessage(
-        { AppKeyPayload: '' },
-        () => {
-          console.log('[Totper] Empty payload sent successfully');
-          resolve();
-        },
-        err => {
-          console.log('[Totper] Failed to send empty payload:', err);
-          reject(err);
-        }
-      );
-      return;
-    }
-
-    // Разбираем payload на отдельные записи
+    // Parse payload into individual entries
     const entries = payload.split(';').filter(entry => entry.trim() !== '');
-    console.log('[Totper] Parsed entries:', entries);
+    console.log('[TOTPer] Parsed entries:', entries);
 
-    // Сначала отправляем количество записей
-    console.log('[Totper] Sending count:', entries.length);
+    // First send the count of entries
+    console.log('[TOTPer] Sending count:', entries.length);
     Pebble.sendAppMessage(
       { AppKeyCount: entries.length },
       () => {
-        console.log('[Totper] Count sent successfully');
+        console.log('[TOTPer] Count sent successfully');
 
-        // Затем отправляем каждую запись отдельно с задержкой
+        // Then send each entry individually with delay
         let sentCount = 0;
         const totalCount = entries.length;
 
@@ -266,31 +249,31 @@ function sendPayloadToWatch(payload) {
 
         function sendNextEntry(index) {
           if (index >= totalCount) {
-            console.log('[Totper] All entries sent, resolving');
+            console.log('[TOTPer] All entries sent, resolving');
             resolve();
             return;
           }
 
-          console.log('[Totper] Sending entry', index, ':', entries[index].trim());
+          console.log('[TOTPer] Sending entry', index, ':', entries[index].trim());
           Pebble.sendAppMessage(
             {
               AppKeyEntryId: index,
               AppKeyEntry: entries[index].trim()
             },
             () => {
-              console.log('[Totper] Entry', index, 'sent successfully');
+              console.log('[TOTPer] Entry', index, 'sent successfully');
               sentCount++;
-              // Отправляем следующий через 100ms
+              // Send next one after 100ms
               setTimeout(() => sendNextEntry(index + 1), 100);
             },
             err => {
-              console.log('[Totper] Failed to send entry', index, ':', err);
+              console.log('[TOTPer] Failed to send entry', index, ':', err);
               reject(err);
             }
           );
         }
 
-        // Начинаем отправку первой записи через 200ms после count
+        // Start sending first entry 200ms after count
         setTimeout(() => sendNextEntry(0), 200);
       },
       err => reject(err)
@@ -303,40 +286,40 @@ function requestResend() {
 }
 
 Pebble.addEventListener('ready', () => {
-  console.log('Totper ready');
-  // Не отправляем автоматически старые данные при запуске
-  // Они будут отправлены только при явном сохранении
+  console.log('TOTPer ready');
+  // Don't send stored data automatically on startup
+  // They will be sent only on explicit save
   requestResend();
 });
 
 Pebble.addEventListener('showConfiguration', () => {
-  console.log('[Totper] showConfiguration called');
-  const storedEntries = localStorage.getItem('totperConfigEntries') || '';
-  console.log('[Totper] storedEntries:', storedEntries);
+  console.log('[TOTPer] showConfiguration called');
+  const storedEntries = localStorage.getItem('TOTPerConfigEntries') || '';
+  console.log('[TOTPer] storedEntries:', storedEntries);
   const url = buildConfigUrl(storedEntries);
-  console.log('[Totper] Opening URL:', url);
+  console.log('[TOTPer] Opening URL:', url);
   Pebble.openURL(url);
 });
 
 Pebble.addEventListener('webviewclosed', e => {
-  console.log('[Totper] webviewclosed called', e);
+  console.log('[TOTPer] webviewclosed called', e);
   if (!e || !e.response) {
-    console.log('[Totper] No response in webviewclosed');
+    console.log('[TOTPer] No response in webviewclosed');
     return;
   }
   let data;
   try {
     data = JSON.parse(decodeURIComponent(e.response));
-    console.log('[Totper] Parsed data:', data);
+    console.log('[TOTPer] Parsed data:', data);
   } catch (err) {
     console.log('Failed to parse config response', err);
     return;
   }
 
   if (data.reset) {
-    localStorage.removeItem('totperConfigEntries');
-    localStorage.removeItem('totperConfigPayload');
-    sendPayloadToWatch('').catch(err => console.log('Failed to clear watch', err));
+    localStorage.removeItem('TOTPerConfigEntries');
+    localStorage.removeItem('TOTPerConfigPayload');
+    // No need to send clear command to watch - just clear local storage
     return;
   }
 
@@ -345,22 +328,22 @@ Pebble.addEventListener('webviewclosed', e => {
     return;
   }
 
-  localStorage.setItem('totperConfigEntries', JSON.stringify(data.entries));
-  localStorage.setItem('totperConfigPayload', data.payload);
+  localStorage.setItem('TOTPerConfigEntries', JSON.stringify(data.entries));
+  localStorage.setItem('TOTPerConfigPayload', data.payload);
   sendPayloadToWatch(data.payload).catch(err => {
     console.log('Failed to send payload', err);
   });
 });
 
 Pebble.addEventListener('appmessage', e => {
-  console.log('[Totper] Received appmessage:', e);
+  console.log('[TOTPer] Received appmessage:', e);
   const payload = e.payload || {};
   if (payload.AppKeyRequest) {
-    console.log('[Totper] Received AppKeyRequest - ignoring for unidirectional sync');
-    // Для unidirectional sync не отправляем данные автоматически
+    console.log('[TOTPer] Received AppKeyRequest - ignoring for unidirectional sync');
+    // For unidirectional sync, don't send data automatically
   }
   if (payload.AppKeyStatus !== undefined) {
-    console.log('[Totper] Watch status:', payload.AppKeyStatus);
+    console.log('[TOTPer] Watch status:', payload.AppKeyStatus);
   }
 });
 
