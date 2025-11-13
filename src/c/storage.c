@@ -217,3 +217,18 @@ void storage_clear_pin(void) {
   storage_set_pin_enabled(false);
 }
 
+// ============================================================================
+// Status bar management
+// ============================================================================
+
+bool storage_is_statusbar_enabled(void) {
+  if (!persist_exists(PERSIST_KEY_STATUSBAR_ENABLED)) {
+    return true;  // Default: enabled
+  }
+  return (bool)persist_read_bool(PERSIST_KEY_STATUSBAR_ENABLED);
+}
+
+void storage_set_statusbar_enabled(bool enabled) {
+  persist_write_bool(PERSIST_KEY_STATUSBAR_ENABLED, enabled);
+}
+

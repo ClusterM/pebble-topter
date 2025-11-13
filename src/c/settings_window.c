@@ -1,9 +1,11 @@
 #include "settings_window.h"
 #include "pin_window.h"
 #include "storage.h"
+#include "ui.h"
 
 #define MENU_SECTION_MAIN 0
 #define MENU_ROW_PIN_ACTION 0
+#define MENU_ROW_STATUSBAR_TOGGLE 1
 
 typedef enum {
   PIN_MODE_NONE,
@@ -109,7 +111,7 @@ static uint16_t prv_menu_get_num_sections_callback(MenuLayer *menu_layer, void *
 }
 
 static uint16_t prv_menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
-  return 1;  // Only one menu item: Set PIN or Disable PIN
+  return 2;  // PIN action and Status Bar toggle
 }
 
 static int16_t prv_menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
@@ -117,18 +119,26 @@ static int16_t prv_menu_get_header_height_callback(MenuLayer *menu_layer, uint16
 }
 
 static void prv_menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t section_index, void *data) {
-  menu_cell_basic_header_draw(ctx, cell_layer, "PIN Settings");
+  menu_cell_basic_header_draw(ctx, cell_layer, "Settings");
 }
 
 static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
   bool has_pin = storage_has_pin();
+  bool statusbar_enabled = storage_is_statusbar_enabled();
   
-  if (cell_index->row == MENU_ROW_PIN_ACTION) {
-    if (has_pin) {
-      menu_cell_basic_draw(ctx, cell_layer, "Disable PIN", "Enter PIN to remove", NULL);
-    } else {
-      menu_cell_basic_draw(ctx, cell_layer, "Set PIN", "Enter PIN twice", NULL);
-    }
+  switch (cell_index->row) {
+    case MENU_ROW_PIN_ACTION:
+      if (has_pin) {
+        menu_cell_basic_draw(ctx, cell_layer, "Disable PIN", "Enter PIN to remove", NULL);
+      } else {
+        menu_cell_basic_draw(ctx, cell_layer, "Set PIN", "Enter PIN twice", NULL);
+      }
+      break;
+      
+    case MENU_ROW_STATUSBAR_TOGGLE:
+      menu_cell_basic_draw(ctx, cell_layer, "Status Bar", 
+                          statusbar_enabled ? "Enabled" : "Disabled", NULL);
+      break;
   }
 }
 
@@ -136,32 +146,50 @@ static void prv_menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
   SettingsWindow *settings = (SettingsWindow*)data;
   bool has_pin = storage_has_pin();
   
-  if (cell_index->row == MENU_ROW_PIN_ACTION) {
-    // Create PIN window if it doesn't exist
-    if (!settings->pin_window) {
-      settings->pin_window = pin_window_create((PinWindowCallbacks){
-        .pin_complete = prv_pin_setup_complete
-      }, settings);
-    }
-    
-    if (settings->pin_window) {
-      pin_window_reset(settings->pin_window);
-      pin_window_set_highlight_color(settings->pin_window, GColorCobaltBlue);
-      
-      if (has_pin) {
-        // Disable PIN mode
-        settings->current_mode = PIN_MODE_DISABLE;
-        pin_window_set_main_text(settings->pin_window, "Disable PIN");
-        pin_window_set_sub_text(settings->pin_window, "Enter current PIN");
-      } else {
-        // Set PIN mode - first entry
-        settings->current_mode = PIN_MODE_SET_FIRST;
-        pin_window_set_main_text(settings->pin_window, "Set PIN");
-        pin_window_set_sub_text(settings->pin_window, "Enter new PIN");
+  switch (cell_index->row) {
+    case MENU_ROW_PIN_ACTION:
+      // Create PIN window if it doesn't exist
+      if (!settings->pin_window) {
+        settings->pin_window = pin_window_create((PinWindowCallbacks){
+          .pin_complete = prv_pin_setup_complete
+        }, settings);
       }
       
-      pin_window_push(settings->pin_window, true);
-    }
+      if (settings->pin_window) {
+        pin_window_reset(settings->pin_window);
+        pin_window_set_highlight_color(settings->pin_window, GColorCobaltBlue);
+        
+        if (has_pin) {
+          // Disable PIN mode
+          settings->current_mode = PIN_MODE_DISABLE;
+          pin_window_set_main_text(settings->pin_window, "Disable PIN");
+          pin_window_set_sub_text(settings->pin_window, "Enter current PIN");
+        } else {
+          // Set PIN mode - first entry
+          settings->current_mode = PIN_MODE_SET_FIRST;
+          pin_window_set_main_text(settings->pin_window, "Set PIN");
+          pin_window_set_sub_text(settings->pin_window, "Enter new PIN");
+        }
+        
+        pin_window_push(settings->pin_window, true);
+      }
+      break;
+      
+    case MENU_ROW_STATUSBAR_TOGGLE:
+      // Toggle status bar setting
+      {
+        bool current = storage_is_statusbar_enabled();
+        storage_set_statusbar_enabled(!current);
+        
+        // Reload menu to show new status
+        menu_layer_reload_data(menu_layer);
+        
+        // Reload main window to apply changes
+        ui_reload_window();
+        
+        vibes_short_pulse();
+      }
+      break;
   }
 }
 

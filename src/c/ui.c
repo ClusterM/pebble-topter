@@ -8,6 +8,7 @@
 Window *s_window;
 MenuLayer *s_menu_layer;
 TextLayer *s_empty_layer;
+StatusBarLayer *s_status_bar;
 size_t s_total_account_count;
 AccountCache *s_account_cache;
 static bool s_is_loading = false;
@@ -275,6 +276,76 @@ void ui_reload_data(void) {
   }
 }
 
+void ui_reload_window(void) {
+  if (!s_window) return;
+  
+  // Save current state
+  size_t saved_count = s_total_account_count;
+  bool saved_loading = s_is_loading;
+  
+  // Manually unload current content
+  if (s_status_bar) {
+    status_bar_layer_destroy(s_status_bar);
+    s_status_bar = NULL;
+  }
+  
+  if (s_menu_layer) {
+    menu_layer_destroy(s_menu_layer);
+    s_menu_layer = NULL;
+  }
+  
+  if (s_empty_layer) {
+    text_layer_destroy(s_empty_layer);
+    s_empty_layer = NULL;
+  }
+  
+  // Reload window content with new settings
+  Layer *window_layer = window_get_root_layer(s_window);
+  GRect bounds = layer_get_bounds(window_layer);
+  
+  // Create status bar if enabled
+  bool statusbar_enabled = storage_is_statusbar_enabled();
+  GRect content_bounds = bounds;
+  
+  if (statusbar_enabled) {
+    s_status_bar = status_bar_layer_create();
+    status_bar_layer_set_colors(s_status_bar, GColorBlack, GColorWhite);
+    layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
+    
+    // Adjust bounds for content below status bar
+    content_bounds = GRect(
+      bounds.origin.x,
+      bounds.origin.y + STATUS_BAR_LAYER_HEIGHT,
+      bounds.size.w,
+      bounds.size.h - STATUS_BAR_LAYER_HEIGHT
+    );
+  }
+  
+  // Create menu layer
+  s_menu_layer = menu_layer_create(content_bounds);
+  menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
+    .get_num_rows = prv_menu_get_num_rows_callback,
+    .get_cell_height = prv_menu_get_cell_height_callback,
+    .draw_row = prv_menu_draw_row_callback,
+  });
+  
+  // Disable highlight by making it the same color as background
+  menu_layer_set_highlight_colors(s_menu_layer, GColorWhite, GColorBlack);
+  
+  layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
+  
+  // Create empty state label
+  s_empty_layer = text_layer_create(content_bounds);
+  layer_add_child(window_layer, text_layer_get_layer(s_empty_layer));
+  
+  // Restore state
+  s_total_account_count = saved_count;
+  s_is_loading = saved_loading;
+  
+  prv_update_empty_state();
+  ui_update_codes();
+}
+
 // ============================================================================
 // Click handlers
 // ============================================================================
@@ -310,8 +381,26 @@ static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
   
+  // Create status bar if enabled
+  bool statusbar_enabled = storage_is_statusbar_enabled();
+  GRect content_bounds = bounds;
+  
+  if (statusbar_enabled) {
+    s_status_bar = status_bar_layer_create();
+    status_bar_layer_set_colors(s_status_bar, GColorBlack, GColorWhite);
+    layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
+    
+    // Adjust bounds for content below status bar
+    content_bounds = GRect(
+      bounds.origin.x,
+      bounds.origin.y + STATUS_BAR_LAYER_HEIGHT,
+      bounds.size.w,
+      bounds.size.h - STATUS_BAR_LAYER_HEIGHT
+    );
+  }
+  
   // Create menu layer
-  s_menu_layer = menu_layer_create(bounds);
+  s_menu_layer = menu_layer_create(content_bounds);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
     .get_num_rows = prv_menu_get_num_rows_callback,
     .get_cell_height = prv_menu_get_cell_height_callback,
@@ -327,7 +416,7 @@ static void prv_window_load(Window *window) {
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
   
   // Create empty state label
-  s_empty_layer = text_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h));
+  s_empty_layer = text_layer_create(content_bounds);
   layer_add_child(window_layer, text_layer_get_layer(s_empty_layer));
   
   prv_update_empty_state();
@@ -335,6 +424,11 @@ static void prv_window_load(Window *window) {
 }
 
 static void prv_window_unload(Window *window) {
+  if (s_status_bar) {
+    status_bar_layer_destroy(s_status_bar);
+    s_status_bar = NULL;
+  }
+  
   if (s_menu_layer) {
     menu_layer_destroy(s_menu_layer);
     s_menu_layer = NULL;

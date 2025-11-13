@@ -37,5 +37,8 @@ void ui_update_codes(void);
 // Reload menu data
 void ui_reload_data(void);
 
+// Reload window (to apply settings changes like status bar)
+void ui_reload_window(void);
+
 // Tick handler (update every second)
 void ui_tick_handler(struct tm *tick_time, TimeUnits units_changed);
