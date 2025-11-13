@@ -267,6 +267,13 @@ const CONFIG_HTML = `
       return results;
     }
 
+    function hideQrResult() {
+      var resultDiv = document.getElementById('qr-result');
+      if (resultDiv) {
+        resultDiv.style.display = 'none';
+      }
+    }
+
     function switchTab(tabName) {
       // Hide all tabs
       var tabs = document.querySelectorAll('.tab');
@@ -335,19 +342,33 @@ const CONFIG_HTML = `
 
       var resultText = '';
       if (results.added > 0) {
-        resultText += 'Added: ' + results.added;
+        if (results.added === 1) {
+          resultText += 'Entry successfully added';
+        } else {
+          resultText += results.added + ' entries successfully added';
+        }
       }
       if (results.skipped > 0) {
-        if (resultText) resultText += ', ';
-        resultText += 'Duplicates: ' + results.skipped;
+        if (resultText) resultText += '<br>';
+        if (results.skipped === 1) {
+          resultText += '1 duplicate skipped';
+        } else {
+          resultText += results.skipped + ' duplicates skipped';
+        }
       }
       if (results.errors > 0) {
-        if (resultText) resultText += ', ';
-        resultText += 'Errors: ' + results.errors;
+        if (resultText) resultText += '<br>';
+        if (results.errors === 1) {
+          resultText += 'Parse error: 1 URL failed';
+        } else {
+          resultText += 'Parse errors: ' + results.errors + ' URLs failed';
+        }
       }
 
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = resultText;
+      
+      setTimeout(hideQrResult, 5000);
 
       if (results.added > 0) {
         document.getElementById('qr-input').value = '';
