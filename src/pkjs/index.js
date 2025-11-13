@@ -60,7 +60,7 @@ const CONFIG_HTML = `
         <label>Secret (Base32)</label>
         <input type="text" id="manual-secret" placeholder="JBSWY3DPEHPK3PXP" maxlength="64">
       </div>
-      <button id="add-manual" class="primary">Add Entry</button>
+      <button id="add-manual" class="primary" style="width: 100%;">Add Entry</button>
     </div>
 
     <div id="qr" class="tab-content">
@@ -68,20 +68,16 @@ const CONFIG_HTML = `
         <p>Paste otpauth URL(s) from QR code(s):</p>
         <p style="font-size: 12px; color: #9e9e9e;">One URL per line. Duplicates will be skipped.</p>
         <div class="form-group">
-          <textarea id="qr-input" placeholder="otpauth://totp/..."></textarea>
+          <textarea id="qr-input" placeholder="otpauth://totp/..." style="min-height: 148px;"></textarea>
         </div>
-        <button id="parse-qr" class="primary">Parse & Add</button>
+        <button id="parse-qr" class="primary" style="width: 100%;">Parse & Add Entries</button>
         <div id="qr-result" class="qr-result" style="display: none;"></div>
       </div>
     </div>
   </div>
 
   <div class="actions">
-    <div>
-      <button id="save" class="primary">Save</button>
-      <button id="reset" class="danger">Clear All</button>
-    </div>
-    <button id="test-log" class="secondary">Test Log</button>
+    <button id="save" class="primary" style="width: 100%;">Send to Watch</button>
   </div>
 
   <script>
@@ -122,8 +118,10 @@ const CONFIG_HTML = `
       // Remove button
       container.querySelector('.entry-remove').addEventListener('click', function(e) {
         e.stopPropagation();
-        entries.splice(index, 1);
-        renderEntries();
+        if (confirm('Delete this entry?')) {
+          entries.splice(index, 1);
+          renderEntries();
+        }
       });
 
       // Drag and drop events
@@ -406,21 +404,6 @@ const CONFIG_HTML = `
       var url = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
       console.log('[TOTPer] Closing with URL:', url);
       window.location = url;
-    });
-
-    // Reset button
-    document.getElementById('reset').addEventListener('click', function() {
-      if (confirm('Delete all entries? This cannot be undone.')) {
-        var result = { reset: true };
-        window.location = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
-      }
-    });
-
-    // Test log button
-    document.getElementById('test-log').addEventListener('click', function() {
-      console.log('[TOTPer] Test log button clicked');
-      console.log('[TOTPer] Current entries:', entries);
-      console.log('[TOTPer] Entries count:', entries.length);
     });
 
     renderEntries();
