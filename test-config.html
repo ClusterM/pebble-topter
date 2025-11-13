@@ -1,10 +1,9 @@
-const CONFIG_HTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TOTPer Settings</title>
+  <title>TOTPer Settings - Test</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 16px; background: #121212; color: #f5f5f5; }
     h1 { font-size: 24px; margin: 0 0 20px; text-align: center; }
@@ -36,8 +35,12 @@ const CONFIG_HTML = `
     .hint { font-size: 13px; color: #b0bec5; margin-bottom: 16px; text-align: center; }
     .drag-handle { margin-right: 12px; color: #666; font-size: 18px; }
   </style>
+</head>
+<body>
   <h1>TOTPer</h1>
-  <div id="entries" class="entries"></div>
+  <div id="entries" class="entries">
+    <p class="hint">No entries yet. Add your first TOTP account below.</p>
+  </div>
 
   <div class="add-section">
     <div class="tabs">
@@ -83,22 +86,8 @@ const CONFIG_HTML = `
 
   <script>
   (function() {
-    console.log('[TOTPer] Script started');
-    var initialData = decodeURIComponent('__INITIAL_DATA__');
+    console.log('[TOTPer] Test interface started');
     var entries = [];
-    console.log('[TOTPer] Initial data length:', initialData ? initialData.length : 0);
-    try {
-      if (initialData) {
-        var parsed = JSON.parse(initialData);
-        if (Array.isArray(parsed)) {
-          entries = parsed;
-        }
-      }
-    } catch (err) {
-      console.log('Failed to parse initial data', err);
-    }
-
-    var entriesRoot = document.getElementById('entries');
     var draggedElement = null;
 
     function createEntryView(entry, index) {
@@ -116,14 +105,12 @@ const CONFIG_HTML = `
         '<button type="button" class="entry-remove">×</button>'
       ].join('');
 
-      // Remove button
       container.querySelector('.entry-remove').addEventListener('click', function(e) {
         e.stopPropagation();
         entries.splice(index, 1);
         renderEntries();
       });
 
-      // Drag and drop events
       container.addEventListener('dragstart', function(e) {
         draggedElement = container;
         container.classList.add('dragging');
@@ -146,7 +133,6 @@ const CONFIG_HTML = `
           var draggedIndex = parseInt(draggedElement.dataset.index);
           var targetIndex = parseInt(container.dataset.index);
 
-          // Reorder entries array
           var draggedEntry = entries.splice(draggedIndex, 1)[0];
           entries.splice(targetIndex, 0, draggedEntry);
 
@@ -158,6 +144,7 @@ const CONFIG_HTML = `
     }
 
     function renderEntries() {
+      var entriesRoot = document.getElementById('entries');
       entriesRoot.innerHTML = '';
       if (!entries.length) {
         var empty = document.createElement('p');
@@ -169,12 +156,6 @@ const CONFIG_HTML = `
           entriesRoot.appendChild(createEntryView(entry, idx));
         });
       }
-    }
-
-    function buildPayload(list) {
-      return list.map(function(item) {
-        return [item.label, item.account_name, item.secret, item.period, item.digits].join('|');
-      }).join(';');
     }
 
     function parseOtpUri(text) {
@@ -197,7 +178,6 @@ const CONFIG_HTML = `
         var label = decodeURIComponent(url.pathname.substring(1) || '');
         var issuer = params.issuer || '';
 
-        // Parse label (format: issuer:account or just account)
         var account = '';
         if (label.includes(':')) {
           var parts = label.split(':');
@@ -234,7 +214,6 @@ const CONFIG_HTML = `
     }
 
     function switchTab(tabName) {
-      // Hide all tabs
       var tabs = document.querySelectorAll('.tab');
       var contents = document.querySelectorAll('.tab-content');
 
@@ -245,7 +224,6 @@ const CONFIG_HTML = `
         content.classList.remove('active');
       });
 
-      // Show selected tab
       document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
       document.getElementById(tabName).classList.add('active');
     }
@@ -268,7 +246,6 @@ const CONFIG_HTML = `
         digits: 6
       });
 
-      // Clear form
       document.getElementById('manual-label').value = '';
       document.getElementById('manual-account').value = '';
       document.getElementById('manual-secret').value = '';
@@ -311,13 +288,9 @@ const CONFIG_HTML = `
       });
     });
 
-    // Manual entry
     document.getElementById('add-manual').addEventListener('click', addManualEntry);
-
-    // QR entry
     document.getElementById('parse-qr').addEventListener('click', addQrEntry);
 
-    // Save button
     document.getElementById('save').addEventListener('click', function() {
       console.log('[TOTPer] Save button clicked');
       console.log('[TOTPer] Current entries:', entries);
@@ -325,26 +298,16 @@ const CONFIG_HTML = `
         alert('Add at least one entry first.');
         return;
       }
-      var payload = buildPayload(entries);
-      console.log('[TOTPer] Built payload:', payload);
-      var result = {
-        entries: entries,
-        payload: payload
-      };
-      var url = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
-      console.log('[TOTPer] Closing with URL:', url);
-      window.location = url;
+      alert('Configuration would be saved to watch!\\n\\n' + JSON.stringify(entries, null, 2));
     });
 
-    // Reset button
     document.getElementById('reset').addEventListener('click', function() {
       if (confirm('Delete all entries? This cannot be undone.')) {
-        var result = { reset: true };
-        window.location = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
+        entries = [];
+        renderEntries();
       }
     });
 
-    // Test log button
     document.getElementById('test-log').addEventListener('click', function() {
       console.log('[TOTPer] Test log button clicked');
       console.log('[TOTPer] Current entries:', entries);
@@ -352,139 +315,8 @@ const CONFIG_HTML = `
     });
 
     renderEntries();
-    console.log('[TOTPer] Initialization complete');
+    console.log('[TOTPer] Test interface ready');
   })();
   </script>
 </body>
 </html>
-`;
-
-function buildConfigUrl(initialEntries) {
-  const initialEncoded = encodeURIComponent(initialEntries || '');
-  const htmlWithData = CONFIG_HTML.replace('__INITIAL_DATA__', initialEncoded);
-  return 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlWithData);
-}
-
-function sendPayloadToWatch(payload) {
-  console.log('[TOTPer] sendPayloadToWatch called with payload:', payload);
-  return new Promise((resolve, reject) => {
-    // Parse payload into individual entries
-    const entries = payload.split(';').filter(entry => entry.trim() !== '');
-    console.log('[TOTPer] Parsed entries:', entries);
-
-    // First send the count of entries
-    console.log('[TOTPer] Sending count:', entries.length);
-    Pebble.sendAppMessage(
-      { AppKeyCount: entries.length },
-      () => {
-        console.log('[TOTPer] Count sent successfully');
-
-        // Then send each entry individually with delay
-        let sentCount = 0;
-        const totalCount = entries.length;
-
-        if (totalCount === 0) {
-          resolve();
-          return;
-        }
-
-        function sendNextEntry(index) {
-          if (index >= totalCount) {
-            console.log('[TOTPer] All entries sent, resolving');
-            resolve();
-            return;
-          }
-
-          console.log('[TOTPer] Sending entry', index, ':', entries[index].trim());
-          Pebble.sendAppMessage(
-            {
-              AppKeyEntryId: index,
-              AppKeyEntry: entries[index].trim()
-            },
-            () => {
-              console.log('[TOTPer] Entry', index, 'sent successfully');
-              sentCount++;
-              // Send next one after 100ms
-              setTimeout(() => sendNextEntry(index + 1), 100);
-            },
-            err => {
-              console.log('[TOTPer] Failed to send entry', index, ':', err);
-              reject(err);
-            }
-          );
-        }
-
-        // Start sending first entry 200ms after count
-        setTimeout(() => sendNextEntry(0), 200);
-      },
-      err => reject(err)
-    );
-  });
-}
-
-function requestResend() {
-  Pebble.sendAppMessage({ AppKeyRequest: 1 }, () => {}, () => {});
-}
-
-Pebble.addEventListener('ready', () => {
-  console.log('TOTPer ready');
-  // Don't send stored data automatically on startup
-  // They will be sent only on explicit save
-  requestResend();
-});
-
-Pebble.addEventListener('showConfiguration', () => {
-  console.log('[TOTPer] showConfiguration called');
-  const storedEntries = localStorage.getItem('TOTPerConfigEntries') || '';
-  console.log('[TOTPer] storedEntries:', storedEntries);
-  const url = buildConfigUrl(storedEntries);
-  console.log('[TOTPer] Opening URL:', url);
-  Pebble.openURL(url);
-});
-
-Pebble.addEventListener('webviewclosed', e => {
-  console.log('[TOTPer] webviewclosed called', e);
-  if (!e || !e.response) {
-    console.log('[TOTPer] No response in webviewclosed');
-    return;
-  }
-  let data;
-  try {
-    data = JSON.parse(decodeURIComponent(e.response));
-    console.log('[TOTPer] Parsed data:', data);
-  } catch (err) {
-    console.log('Failed to parse config response', err);
-    return;
-  }
-
-  if (data.reset) {
-    localStorage.removeItem('TOTPerConfigEntries');
-    localStorage.removeItem('TOTPerConfigPayload');
-    // No need to send clear command to watch - just clear local storage
-    return;
-  }
-
-  if (!Array.isArray(data.entries) || typeof data.payload !== 'string') {
-    console.log('Config response invalid');
-    return;
-  }
-
-  localStorage.setItem('TOTPerConfigEntries', JSON.stringify(data.entries));
-  localStorage.setItem('TOTPerConfigPayload', data.payload);
-  sendPayloadToWatch(data.payload).catch(err => {
-    console.log('Failed to send payload', err);
-  });
-});
-
-Pebble.addEventListener('appmessage', e => {
-  console.log('[TOTPer] Received appmessage:', e);
-  const payload = e.payload || {};
-  if (payload.AppKeyRequest) {
-    console.log('[TOTPer] Received AppKeyRequest - ignoring for unidirectional sync');
-    // For unidirectional sync, don't send data automatically
-  }
-  if (payload.AppKeyStatus !== undefined) {
-    console.log('[TOTPer] Watch status:', payload.AppKeyStatus);
-  }
-});
-

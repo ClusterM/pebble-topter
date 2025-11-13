@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>TOTPer Simple Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .entry { background: #f0f0f0; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .result { margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 5px; }
+        .error { background: #ffebee; }
+    </style>
+</head>
+<body>
+    <h1>TOTPer QR Parser Test</h1>
+
+    <div class="test-section">
+        <h3>Test otpauth URL parsing:</h3>
+        <textarea id="test-url" placeholder="Paste otpauth URL here..."></textarea>
+        <button onclick="testParse()">Test Parse</button>
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Quick Tests:</h3>
+        <button onclick="quickTest(1)">Test 1: Buy Me a Coffee</button>
+        <button onclick="quickTest(2)">Test 2: GitHub</button>
+        <button onclick="quickTest(3)">Test 3: Google</button>
+        <button onclick="quickTest(4)">Test 4: Custom params</button>
+    </div>
+
+    <div id="entries">
+        <h3>Parsed Entries:</h3>
+    </div>
+
+    <script>
+        var entries = [];
+
+        function parseOtpUri(text) {
+            try {
+                console.log('Parsing URL:', text);
+                var url = new URL(text);
+                if (url.protocol !== 'otpauth:') {
+                    throw new Error('Not an otpauth URL');
+                }
+
+                var type = url.hostname;
+                if (type !== 'totp') {
+                    throw new Error('Only TOTP is supported');
+                }
+
+                var params = {};
+                url.searchParams.forEach(function(value, key) {
+                    params[key.toLowerCase()] = value;
+                });
+
+                var label = decodeURIComponent(url.pathname.substring(1) || '');
+                var issuer = params.issuer || '';
+
+                console.log('Raw label:', label);
+                console.log('Issuer from params:', issuer);
+
+                var account = '';
+                if (label.includes(':')) {
+                    var parts = label.split(':');
+                    if (!issuer) issuer = parts[0];
+                    account = parts.slice(1).join(':');
+                } else {
+                    account = label;
+                }
+
+                var secret = (params.secret || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
+                var digits = parseInt(params.digits, 10) || 6;
+                var period = parseInt(params.period, 10) || 30;
+
+                if (!secret) {
+                    throw new Error('No secret found');
+                }
+
+                return {
+                    label: issuer,
+                    account_name: account,
+                    secret: secret,
+                    period: period,
+                    digits: digits
+                };
+            } catch (err) {
+                console.error('Parse error:', err);
+                throw new Error('Invalid otpauth URL: ' + err.message);
+            }
+        }
+
+        function testParse() {
+            var text = document.getElementById('test-url').value.trim();
+            var resultDiv = document.getElementById('result');
+
+            if (!text) {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 'Please enter a URL';
+                return;
+            }
+
+            try {
+                var entry = parseOtpUri(text);
+                entries.push(entry);
+
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = 'SUCCESS!<br>' +
+                    'Label: ' + entry.label + '<br>' +
+                    'Account: ' + (entry.account_name || '(none)') + '<br>' +
+                    'Secret: ' + entry.secret.substring(0, 8) + '...<br>' +
+                    'Period: ' + entry.period + 's, Digits: ' + entry.digits;
+
+                updateEntries();
+                document.getElementById('test-url').value = '';
+            } catch (err) {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 'ERROR: ' + err.message;
+            }
+        }
+
+        function quickTest(num) {
+            var urls = [
+                'otpauth://totp/Buy%20Me%20a%20Coffee:cluster%40cluster.wtf?secret=RRGPQLTKQN4E6DNIPXYDFCIWE3WXVDEY&issuer=Buy%20Me%20a%20Coffee',
+                'otpauth://totp/GitHub:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub',
+                'otpauth://totp/Google:user@gmail.com?secret=JBSWY3DPEHPK3PXP',
+                'otpauth://totp/Example?secret=JBSWY3DPEHPK3PXP&issuer=Example&digits=8&period=60'
+            ];
+
+            document.getElementById('test-url').value = urls[num - 1];
+            testParse();
+        }
+
+        function updateEntries() {
+            var container = document.getElementById('entries');
+            var list = container.querySelector('ul') || document.createElement('ul');
+            list.innerHTML = '';
+
+            if (entries.length === 0) {
+                container.innerHTML = '<h3>Parsed Entries:</h3><p>No entries yet</p>';
+                return;
+            }
+
+            entries.forEach(function(entry, idx) {
+                var li = document.createElement('li');
+                li.className = 'entry';
+                li.innerHTML = '<strong>' + entry.label + '</strong> - ' +
+                    (entry.account_name || 'no account') +
+                    ' <small>(' + entry.secret.substring(0, 8) + '...)</small>';
+                list.appendChild(li);
+            });
+
+            if (!container.querySelector('ul')) {
+                container.innerHTML = '<h3>Parsed Entries:</h3>';
+                container.appendChild(list);
+            }
+        }
+
+        console.log('TOTPer test page loaded');
+        updateEntries();
+    </script>
+</body>
+</html>
