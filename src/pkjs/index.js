@@ -43,11 +43,28 @@ const CONFIG_HTML = `
 
   <div class="add-section">
     <div class="tabs">
-      <button class="tab active" data-tab="manual">Manual Entry</button>
-      <button class="tab" data-tab="qr">QR Code</button>
+      <button class="tab active" data-tab="qr">QR Code</button>
+      <button class="tab" data-tab="manual">Manual Entry</button>
     </div>
 
-    <div id="manual" class="tab-content active">
+    <div id="qr" class="tab-content active">
+      <div class="qr-section">
+        <p style="font-weight: bold;">QR Code Import</p>
+        <p style="font-size: 12px; color: #b0bec5; line-height: 1.4; margin-bottom: 12px; text-align: left;">
+          1. Use any QR scanner app to scan the 2FA QR code<br>
+          2. Copy the scanned text (starts with "otpauth://totp/")<br>
+          3. Paste it into the field below
+        </p>
+        <p style="font-size: 12px; color: #9e9e9e;">Multiple URLs supported (one per line).<br/>Duplicates will be skipped.</p>
+        <div class="form-group">
+          <textarea id="qr-input" placeholder="otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example" style="min-height: 148px;"></textarea>
+        </div>
+        <button id="parse-qr" class="primary" style="width: 100%;">Parse & Add Entries</button>
+        <div id="qr-result" class="qr-result" style="display: none;"></div>
+      </div>
+    </div>
+
+    <div id="manual" class="tab-content">
       <div class="form-group">
         <label>Label</label>
         <input type="text" id="manual-label" placeholder="e.g. Google" maxlength="32">
@@ -61,18 +78,6 @@ const CONFIG_HTML = `
         <input type="text" id="manual-secret" placeholder="JBSWY3DPEHPK3PXP" maxlength="64">
       </div>
       <button id="add-manual" class="primary" style="width: 100%;">Add Entry</button>
-    </div>
-
-    <div id="qr" class="tab-content">
-      <div class="qr-section">
-        <p>Paste otpauth URL(s) from QR code(s):</p>
-        <p style="font-size: 12px; color: #9e9e9e;">One URL per line. Duplicates will be skipped.</p>
-        <div class="form-group">
-          <textarea id="qr-input" placeholder="otpauth://totp/..." style="min-height: 148px;"></textarea>
-        </div>
-        <button id="parse-qr" class="primary" style="width: 100%;">Parse & Add Entries</button>
-        <div id="qr-result" class="qr-result" style="display: none;"></div>
-      </div>
     </div>
   </div>
 
