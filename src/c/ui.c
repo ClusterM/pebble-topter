@@ -190,8 +190,11 @@ void ui_update_codes(void) {
     if (cache->remaining == 0) {
       cache->remaining = period;
       needs_vibe = true;
+    }    
+    if (cache->remaining <= 2 || cache->remaining == period) {
+      needs_vibe = true;
     }
-    
+
     needs_redraw = true;
   }
   
@@ -200,7 +203,12 @@ void ui_update_codes(void) {
   }
 
   if (needs_vibe) {
-    vibes_short_pulse();
+    uint32_t const segments[] = { 50 };
+    VibePattern pat = {
+      .durations = segments,
+      .num_segments = ARRAY_LENGTH(segments),
+    };    
+    vibes_enqueue_custom_pattern(pat);
   }
 }
 
