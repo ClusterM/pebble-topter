@@ -333,6 +333,9 @@ const CONFIG_HTML = `
       var byte;
       
       do {
+        if (shift >= 35) {
+          throw new Error('Varint too large');
+        }
         if (pos >= bytes.length) {
           throw new Error('Unexpected end of varint');
         }
