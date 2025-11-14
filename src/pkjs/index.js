@@ -300,25 +300,22 @@ const CONFIG_HTML = `
     }
 
     // Base32 decode helper
-    function base32ToHex(base32) {
-      var base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-      var bits = '';
-      var hex = '';
+    // Decode protobuf varint
+    function readVarint(bytes, pos) {
+      var value = 0;
+      var shift = 0;
+      var byte;
       
-      base32 = base32.replace(/=+$/, '');
+      do {
+        if (pos >= bytes.length) {
+          throw new Error('Unexpected end of varint');
+        }
+        byte = bytes.charCodeAt(pos++);
+        value |= (byte & 0x7F) << shift;
+        shift += 7;
+      } while (byte & 0x80);
       
-      for (var i = 0; i < base32.length; i++) {
-        var val = base32chars.indexOf(base32.charAt(i).toUpperCase());
-        if (val === -1) continue;
-        bits += val.toString(2).padStart(5, '0');
-      }
-      
-      for (var i = 0; i + 8 <= bits.length; i += 8) {
-        var chunk = bits.substr(i, 8);
-        hex += String.fromCharCode(parseInt(chunk, 2));
-      }
-      
-      return hex;
+      return { value: value, pos: pos };
     }
 
     // Parse Google Authenticator migration format
@@ -350,14 +347,19 @@ const CONFIG_HTML = `
         var accounts = [];
         var pos = 0;
         
-        // Simple protobuf parser for Google Authenticator format
+        // Protobuf parser for Google Authenticator format
         while (pos < bytes.length) {
+          if (pos >= bytes.length) break;
+          
           var tag = bytes.charCodeAt(pos++);
           var wireType = tag & 0x07;
           var fieldNumber = tag >> 3;
           
           if (wireType === 2) { // Length-delimited
-            var length = bytes.charCodeAt(pos++);
+            var lengthResult = readVarint(bytes, pos);
+            var length = lengthResult.value;
+            pos = lengthResult.pos;
+            
             var value = bytes.substr(pos, length);
             pos += length;
             
@@ -367,8 +369,11 @@ const CONFIG_HTML = `
                 accounts.push(account);
               }
             }
+          } else if (wireType === 0) { // Varint
+            var varintResult = readVarint(bytes, pos);
+            pos = varintResult.pos;
           } else {
-            // Skip other types
+            // Skip unknown wire types
             pos++;
           }
         }
@@ -389,12 +394,17 @@ const CONFIG_HTML = `
       
       var pos = 0;
       while (pos < data.length) {
+        if (pos >= data.length) break;
+        
         var tag = data.charCodeAt(pos++);
         var wireType = tag & 0x07;
         var fieldNumber = tag >> 3;
         
         if (wireType === 2) { // Length-delimited (bytes/string)
-          var length = data.charCodeAt(pos++);
+          var lengthResult = readVarint(data, pos);
+          var length = lengthResult.value;
+          pos = lengthResult.pos;
+          
           var value = data.substr(pos, length);
           pos += length;
           
@@ -411,7 +421,9 @@ const CONFIG_HTML = `
             issuer = value;
           }
         } else if (wireType === 0) { // Varint
-          var value = data.charCodeAt(pos++);
+          var varintResult = readVarint(data, pos);
+          var value = varintResult.value;
+          pos = varintResult.pos;
           
           if (fieldNumber === 4) { // algorithm
             algorithm = value - 1; // Convert from proto enum (1=SHA1, 2=SHA256, 3=SHA512)
@@ -422,6 +434,7 @@ const CONFIG_HTML = `
             type = value;
           }
         } else {
+          // Skip unknown wire types
           pos++;
         }
       }
@@ -460,9 +473,18 @@ const CONFIG_HTML = `
       }
       
       var base32 = '';
-      for (var i = 0; i + 5 <= bits.length; i += 5) {
+      for (var i = 0; i < bits.length; i += 5) {
         var chunk = bits.substr(i, 5);
+        // Pad remaining bits with zeros on the right if less than 5 bits
+        if (chunk.length < 5) {
+          chunk = chunk.padEnd(5, '0');
+        }
         base32 += base32chars[parseInt(chunk, 2)];
+      }
+      
+      // Add padding if needed (Base32 padding to 8-character blocks)
+      while (base32.length % 8 !== 0) {
+        base32 += '=';
       }
       
       return base32;
