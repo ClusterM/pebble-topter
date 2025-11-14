@@ -125,14 +125,41 @@ const CONFIG_HTML = `
     <div id="qr" class="tab-content active">
       <div class="qr-section">
         <p style="font-weight: bold;">QR Code Import</p>
-        <p style="font-size: 12px; color: #b0bec5; line-height: 1.4; margin-bottom: 12px; text-align: left;">
-          1. Use any QR scanner app to scan the 2FA QR code<br>
-          2. Copy the scanned text (starts with "otpauth://totp/")<br>
-          3. Paste it into the field below
-        </p>
+        
+        <details style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+          <summary style="cursor: pointer; font-weight: bold; font-size: 13px; text-align: left; margin-bottom: 0;">How to import a regular QR Code</summary>
+          <div style="font-size: 12px; color: #b0bec5; line-height: 1.6; padding-left: 8px; margin-top: 8px; text-align: left;">
+            1. Switch to your camera (or other QR code scanner application) and scan the QR code<br>
+            2. Copy the scanned data as a text string (it should start with <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 2px;">otpauth://</code>)<br>
+            3. Paste the copied code into the text field (you can paste multiple codes at once)
+          </div>
+        </details>
+        
+        <details style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+          <summary style="cursor: pointer; font-weight: bold; font-size: 13px; text-align: left; margin-bottom: 0;">How to import from Google Authenticator</summary>
+          <div style="font-size: 12px; color: #b0bec5; line-height: 1.6; padding-left: 8px; margin-top: 8px; text-align: left;">
+            <strong>If you're already using Google Authenticator</strong>, you can export all your accounts at once:<br><br>
+            
+            1. Open Google Authenticator<br>
+            2. Tap the <strong>⋮</strong> (three dots) menu → <strong>Transfer accounts</strong> → <strong>Export accounts</strong><br>
+            3. Select the accounts you want to export<br>
+            4. Google Authenticator will display one or more QR codes (if you have many accounts, it will split them into multiple QR codes)<br>
+            5. Scan it, somehow... This can be tricky since the QR is on your phone itself. This is one way to do it:<br>
+            <div style="padding-left: 16px; margin: 8px 0;">
+              • Take a screenshot and display it on your computer, then scan with another device<br>
+              • Or use a second phone/tablet to scan it<br>
+              • Or use your computer's webcam if you can display the QR code there<br>
+              • Copy the scanned link (it starts with <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 2px;">otpauth-migration://</code>)<br>
+              • If there are multiple QR codes, scan each one
+            </div>
+            6. Paste the copied link(s) into the text field (one per line if you have multiple)<br>
+            7. All accounts will be imported at once!
+          </div>
+        </details>
+        
         <p style="font-size: 12px; color: #9e9e9e;">Multiple URLs supported (one per line).<br/>Duplicates will be skipped.</p>
         <div class="form-group">
-          <textarea id="qr-input" placeholder="otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example" style="min-height: 148px;"></textarea>
+          <textarea id="qr-input" placeholder="otpauth://..." style="min-height: 120px;"></textarea>
         </div>
         <button id="parse-qr" class="primary" style="width: 100%;">Parse & Add Entries</button>
         <div id="qr-result" class="qr-result" style="display: none;"></div>
@@ -299,7 +326,6 @@ const CONFIG_HTML = `
       }).join(';');
     }
 
-    // Base32 decode helper
     // Decode protobuf varint
     function readVarint(bytes, pos) {
       var value = 0;
@@ -349,8 +375,6 @@ const CONFIG_HTML = `
         
         // Protobuf parser for Google Authenticator format
         while (pos < bytes.length) {
-          if (pos >= bytes.length) break;
-          
           var tag = bytes.charCodeAt(pos++);
           var wireType = tag & 0x07;
           var fieldNumber = tag >> 3;
@@ -394,8 +418,6 @@ const CONFIG_HTML = `
       
       var pos = 0;
       while (pos < data.length) {
-        if (pos >= data.length) break;
-        
         var tag = data.charCodeAt(pos++);
         var wireType = tag & 0x07;
         var fieldNumber = tag >> 3;

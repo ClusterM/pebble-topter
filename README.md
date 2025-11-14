@@ -46,7 +46,7 @@ TOTPer should not be your only authenticator. Why? I cannot take responsibility 
 2. Tap the **⋮** (three dots) menu → **Transfer accounts** → **Export accounts**
 3. Select the accounts you want to export
 4. Google Authenticator will display one or more QR codes (if you have many accounts, it will split them into multiple QR codes)
-5. Scan itб somehow... This can be tricky since the QR is on your phone itself. This is one way to do it:
+5. Scan it, somehow... This can be tricky since the QR is on your phone itself. This is one way to do it:
    - Take a screenshot and display it on your computer, then scan with another device
    - Or use a second phone/tablet to scan it
    - Or use your computer's webcam if you can display the QR code there
