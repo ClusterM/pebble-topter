@@ -4,8 +4,8 @@
 #include <string.h>
 
 typedef struct {
-  char label[NAME_MAX_LEN + 1];
-  char account_name[NAME_MAX_LEN + 1];
+  char label[LABEL_MAX_LEN + 1];
+  char account_name[ACCOUNT_NAME_MAX_LEN + 1];
   uint8_t secret_len;
   uint8_t secret[SECRET_BYTES_MAX];
   uint16_t period;

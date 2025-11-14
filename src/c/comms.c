@@ -37,7 +37,7 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     return false;
   }
 
-  char buffer[SECRET_BASE32_MAX_LEN + NAME_MAX_LEN * 2 + 32];
+  char buffer[SECRET_BASE32_MAX_LEN + LABEL_MAX_LEN + ACCOUNT_NAME_MAX_LEN + 32];
   strncpy(buffer, line, sizeof(buffer) - 1);
   buffer[sizeof(buffer) - 1] = '\0';
 

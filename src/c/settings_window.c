@@ -2,10 +2,12 @@
 #include "pin_window.h"
 #include "storage.h"
 #include "ui.h"
+#include "config.h"
 
 #define MENU_SECTION_MAIN 0
 #define MENU_ROW_PIN_ACTION 0
 #define MENU_ROW_STATUSBAR_TOGGLE 1
+#define MENU_ROW_SYSTEM_INFO 2
 
 typedef enum {
   PIN_MODE_NONE,
@@ -18,11 +20,17 @@ struct SettingsWindow {
   Window *window;
   MenuLayer *menu_layer;
   PinWindow *pin_window;
+  Window *info_window;
+  TextLayer *info_text_layer;
   PinMode current_mode;
   Pin first_pin;  // Store first PIN entry for confirmation
 };
 
 static SettingsWindow *s_settings_window = NULL;
+
+// Forward declarations
+static void prv_info_window_load(Window *window);
+static void prv_info_window_unload(Window *window);
 
 // ============================================================================
 // PIN window callbacks
@@ -111,7 +119,7 @@ static uint16_t prv_menu_get_num_sections_callback(MenuLayer *menu_layer, void *
 }
 
 static uint16_t prv_menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
-  return 2;  // PIN action and Status Bar toggle
+  return 3;  // PIN action, Status Bar toggle, System Info
 }
 
 static int16_t prv_menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
@@ -138,6 +146,10 @@ static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
     case MENU_ROW_STATUSBAR_TOGGLE:
       menu_cell_basic_draw(ctx, cell_layer, "Status Bar", 
                           statusbar_enabled ? "Enabled" : "Disabled", NULL);
+      break;
+      
+    case MENU_ROW_SYSTEM_INFO:
+      menu_cell_basic_draw(ctx, cell_layer, "System Info", "Version & Memory", NULL);
       break;
   }
 }
@@ -189,6 +201,68 @@ static void prv_menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
         vibes_short_pulse();
       }
       break;
+      
+    case MENU_ROW_SYSTEM_INFO:
+      // Create and show system info window
+      if (!settings->info_window) {
+        settings->info_window = window_create();
+        if (settings->info_window) {
+          window_set_user_data(settings->info_window, settings);
+          window_set_window_handlers(settings->info_window, (WindowHandlers){
+            .load = prv_info_window_load,
+            .unload = prv_info_window_unload,
+          });
+        }
+      }
+      
+      if (settings->info_window) {
+        window_stack_push(settings->info_window, true);
+      }
+      break;
+  }
+}
+
+// ============================================================================
+// System Information window
+// ============================================================================
+
+static void prv_info_window_load(Window *window) {
+  SettingsWindow *settings = window_get_user_data(window);
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+  
+  // Create text layer for system info
+  settings->info_text_layer = text_layer_create(GRect(5, 10, bounds.size.w - 10, bounds.size.h - 20));
+  text_layer_set_font(settings->info_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_text_alignment(settings->info_text_layer, GTextAlignmentLeft);
+  text_layer_set_overflow_mode(settings->info_text_layer, GTextOverflowModeWordWrap);
+  
+  // Format system information
+  static char info_buffer[256];
+  size_t heap_used = heap_bytes_used();
+  size_t heap_free = heap_bytes_free();
+  
+  snprintf(info_buffer, sizeof(info_buffer),
+    "Version: %s\n\n"
+    "Account count: %zu\n\n"
+    "Memory used: %zu B\n"
+    "Memory free: %zu B\n",
+    VERSION,
+    storage_get_count(),
+    heap_used,
+    heap_free
+  );
+  
+  text_layer_set_text(settings->info_text_layer, info_buffer);
+  layer_add_child(window_layer, text_layer_get_layer(settings->info_text_layer));
+}
+
+static void prv_info_window_unload(Window *window) {
+  SettingsWindow *settings = window_get_user_data(window);
+  
+  if (settings->info_text_layer) {
+    text_layer_destroy(settings->info_text_layer);
+    settings->info_text_layer = NULL;
   }
 }
 
@@ -227,6 +301,11 @@ static void prv_window_unload(Window *window) {
   if (settings->pin_window) {
     pin_window_destroy(settings->pin_window);
     settings->pin_window = NULL;
+  }
+  
+  if (settings->info_window) {
+    window_destroy(settings->info_window);
+    settings->info_window = NULL;
   }
 }
 
