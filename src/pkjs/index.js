@@ -448,10 +448,23 @@ const CONFIG_HTML = `
           pos = varintResult.pos;
           
           if (fieldNumber === 4) { // algorithm
-            algorithm = value - 1; // Convert from proto enum (1=SHA1, 2=SHA256, 3=SHA512)
-            if (algorithm < 0) algorithm = 0;
+            // Only accept valid proto enum values: 1=SHA1, 2=SHA256, 3=SHA512
+            if (value >= 1 && value <= 3) {
+              algorithm = value - 1;
+            } else {
+              // Invalid algorithm value, reject input
+              return null;
+            }
           } else if (fieldNumber === 5) { // digits
-            digits = value === 2 ? 8 : 6;
+            // Only accept valid proto enum values: 1=6 digits, 2=8 digits
+            if (value === 1) {
+              digits = 6;
+            } else if (value === 2) {
+              digits = 8;
+            } else {
+              // Invalid digits value, reject input
+              return null;
+            }
           } else if (fieldNumber === 6) { // type
             type = value;
           }
