@@ -157,7 +157,7 @@ const CONFIG_HTML = `
   </div>
 
   <div class="actions">
-    <button id="save" class="primary" style="width: 100%;">Send to Watch</button>
+    <button id="save" class="primary" style="width: 100%;">Send to the Watch</button>
   </div>
 
   <script>
@@ -299,6 +299,161 @@ const CONFIG_HTML = `
       }).join(';');
     }
 
+    // Base32 decode helper
+    function base32ToHex(base32) {
+      var base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      var bits = '';
+      var hex = '';
+      
+      base32 = base32.replace(/=+$/, '');
+      
+      for (var i = 0; i < base32.length; i++) {
+        var val = base32chars.indexOf(base32.charAt(i).toUpperCase());
+        if (val === -1) continue;
+        bits += val.toString(2).padStart(5, '0');
+      }
+      
+      for (var i = 0; i + 8 <= bits.length; i += 8) {
+        var chunk = bits.substr(i, 8);
+        hex += String.fromCharCode(parseInt(chunk, 2));
+      }
+      
+      return hex;
+    }
+
+    // Parse Google Authenticator migration format
+    function parseGoogleAuthMigration(text) {
+      try {
+        // Extract data parameter
+        var match = text.match(/otpauth-migration:\\/\\/offline\\?data=([^&\\s]+)/);
+        if (!match) {
+          throw new Error('Invalid migration URL');
+        }
+        
+        var data = decodeURIComponent(match[1]);
+        var bytes = atob(data);
+        
+        var accounts = [];
+        var pos = 0;
+        
+        // Simple protobuf parser for Google Authenticator format
+        while (pos < bytes.length) {
+          var tag = bytes.charCodeAt(pos++);
+          var wireType = tag & 0x07;
+          var fieldNumber = tag >> 3;
+          
+          if (wireType === 2) { // Length-delimited
+            var length = bytes.charCodeAt(pos++);
+            var value = bytes.substr(pos, length);
+            pos += length;
+            
+            if (fieldNumber === 1) { // otp_parameters
+              var account = parseOtpParameters(value);
+              if (account) {
+                accounts.push(account);
+              }
+            }
+          } else {
+            // Skip other types
+            pos++;
+          }
+        }
+        
+        return accounts;
+      } catch (err) {
+        throw new Error('Failed to parse Google Auth migration: ' + err.message);
+      }
+    }
+    
+    function parseOtpParameters(data) {
+      var secret = '';
+      var name = '';
+      var issuer = '';
+      var algorithm = 0;
+      var digits = 6;
+      var type = 2; // TOTP
+      
+      var pos = 0;
+      while (pos < data.length) {
+        var tag = data.charCodeAt(pos++);
+        var wireType = tag & 0x07;
+        var fieldNumber = tag >> 3;
+        
+        if (wireType === 2) { // Length-delimited (bytes/string)
+          var length = data.charCodeAt(pos++);
+          var value = data.substr(pos, length);
+          pos += length;
+          
+          if (fieldNumber === 1) { // secret
+            // Convert bytes to base32
+            var hex = '';
+            for (var i = 0; i < value.length; i++) {
+              hex += value.charCodeAt(i).toString(16).padStart(2, '0');
+            }
+            secret = hexToBase32(hex);
+          } else if (fieldNumber === 2) { // name
+            name = value;
+          } else if (fieldNumber === 3) { // issuer
+            issuer = value;
+          }
+        } else if (wireType === 0) { // Varint
+          var value = data.charCodeAt(pos++);
+          
+          if (fieldNumber === 4) { // algorithm
+            algorithm = value - 1; // Convert from proto enum (1=SHA1, 2=SHA256, 3=SHA512)
+            if (algorithm < 0) algorithm = 0;
+          } else if (fieldNumber === 5) { // digits
+            digits = value === 2 ? 8 : 6;
+          } else if (fieldNumber === 6) { // type
+            type = value;
+          }
+        } else {
+          pos++;
+        }
+      }
+      
+      if (!secret || type !== 2) { // Only TOTP
+        return null;
+      }
+      
+      // Parse name to extract account if needed
+      var account_name = '';
+      if (name.includes(':')) {
+        var parts = name.split(':');
+        if (!issuer) issuer = parts[0];
+        account_name = parts.slice(1).join(':');
+      } else {
+        account_name = name;
+      }
+      
+      return {
+        label: issuer || 'Unknown',
+        account_name: account_name,
+        secret: secret,
+        period: 30,
+        digits: digits,
+        algorithm: algorithm
+      };
+    }
+    
+    function hexToBase32(hex) {
+      var base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      var bits = '';
+      
+      for (var i = 0; i < hex.length; i += 2) {
+        var byte = parseInt(hex.substr(i, 2), 16);
+        bits += byte.toString(2).padStart(8, '0');
+      }
+      
+      var base32 = '';
+      for (var i = 0; i + 5 <= bits.length; i += 5) {
+        var chunk = bits.substr(i, 5);
+        base32 += base32chars[parseInt(chunk, 2)];
+      }
+      
+      return base32;
+    }
+
     function parseOtpUri(text) {
       try {
         var url = new URL(text);
@@ -380,6 +535,33 @@ const CONFIG_HTML = `
         var line = lines[i].trim();
         if (!line) continue;
         
+        // Check if it's a Google Authenticator migration URL
+        if (line.startsWith('otpauth-migration://')) {
+          try {
+            var migratedAccounts = parseGoogleAuthMigration(line);
+            for (var j = 0; j < migratedAccounts.length; j++) {
+              // Check limit before adding
+              if (entries.length >= MAX_ACCOUNTS) {
+                results.limitReached = true;
+                break;
+              }
+              
+              var entry = migratedAccounts[j];
+              if (isDuplicate(entry)) {
+                results.skipped++;
+              } else {
+                entries.push(entry);
+                results.added++;
+              }
+            }
+            if (results.limitReached) break;
+          } catch (e) {
+            results.errors++;
+          }
+          continue;
+        }
+        
+        // Regular otpauth:// URL
         // Check limit before processing
         if (entries.length >= MAX_ACCOUNTS) {
           results.limitReached = true;
