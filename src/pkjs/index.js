@@ -360,6 +360,7 @@ const CONFIG_HTML = `
       try {
         // Parse URL
         var url = new URL(text);
+        
         if (url.protocol !== 'otpauth-migration:') {
           throw new Error('Not an otpauth-migration URL');
         }
@@ -387,7 +388,7 @@ const CONFIG_HTML = `
         }
         
         var accounts = [];
-        var skippedCount = 0;
+        var skippedAccounts = [];
         var pos = 0;
         
         // Protobuf parser for Google Authenticator format
@@ -406,7 +407,7 @@ const CONFIG_HTML = `
               throw new Error('Data length exceeds available bytes');
             }
             
-            var value = bytes.substr(pos, length);
+            var value = bytes.slice(pos, pos + length);
             pos += length;
             
             if (fieldNumber === 1) { // otp_parameters
@@ -414,8 +415,8 @@ const CONFIG_HTML = `
                 var account = parseOtpParameters(value);
                 accounts.push(account);
               } catch (e) {
-                // Account validation failed, count as skipped
-                skippedCount++;
+                // Account validation failed, save error details
+                skippedAccounts.push(e.message);
               }
             }
           } else if (wireType === 0) { // Varint
@@ -436,7 +437,7 @@ const CONFIG_HTML = `
           }
         }
         
-        return { accounts: accounts, skipped: skippedCount };
+        return { accounts: accounts, skippedAccounts: skippedAccounts };
       } catch (err) {
         throw new Error('Failed to parse Google Auth migration: ' + err.message);
       }
@@ -448,7 +449,7 @@ const CONFIG_HTML = `
       var issuer = '';
       var algorithm = 0;
       var digits = 6;
-      var type = 1; // TOTP (default)
+      var type = 2; // TOTP (default)
       
       var pos = 0;
       while (pos < data.length) {
@@ -466,7 +467,7 @@ const CONFIG_HTML = `
             throw new Error('Data length exceeds available bytes in OTP parameters');
           }
           
-          var value = data.substr(pos, length);
+          var value = data.slice(pos, pos + length);
           pos += length;
           
           if (fieldNumber === 1) { // secret
@@ -537,8 +538,10 @@ const CONFIG_HTML = `
         throw new Error('No secret found in OTP parameters');
       }
       
-      if (type !== 1) { // Only TOTP
-        throw new Error('Only TOTP is supported (type: ' + type + ')');
+      if (type === 1) {
+        throw new Error('HOTP is not supported, only TOTP');
+      } else if (type !== 2 && type !== 0) {
+        throw new Error('Unknown OTP type: ' + type);
       }
       
       // Parse name to extract account if needed
@@ -566,7 +569,7 @@ const CONFIG_HTML = `
       var bitsArray = [];
       
       for (var i = 0; i < hex.length; i += 2) {
-        var byte = parseInt(hex.substr(i, 2), 16);
+        var byte = parseInt(hex.slice(i, i + 2), 16);
         bitsArray.push(byte.toString(2).padStart(8, '0'));
       }
       
@@ -574,7 +577,7 @@ const CONFIG_HTML = `
       
       var base32Array = [];
       for (var i = 0; i < bits.length; i += 5) {
-        var chunk = bits.substr(i, 5);
+        var chunk = bits.slice(i, i + 5);
         // Pad remaining bits with zeros on the right if less than 5 bits
         if (chunk.length < 5) {
           chunk = chunk.padEnd(5, '0');
@@ -667,7 +670,7 @@ const CONFIG_HTML = `
     function processMultipleUrls(text) {
       var newline = String.fromCharCode(10);
       var lines = text.split(newline);
-      var results = { added: 0, skipped: 0, errors: 0, limitReached: false };
+      var results = { added: 0, skipped: 0, errors: 0, limitReached: false, errorDetails: [] };
       
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
@@ -679,8 +682,13 @@ const CONFIG_HTML = `
             var migrationResult = parseGoogleAuthMigration(line);
             var migratedAccounts = migrationResult.accounts;
             
-            // Add skipped accounts from parsing to error count
-            results.errors += migrationResult.skipped;
+            // Add skipped accounts errors to error details
+            if (migrationResult.skippedAccounts && migrationResult.skippedAccounts.length > 0) {
+              results.errors += migrationResult.skippedAccounts.length;
+              for (var k = 0; k < migrationResult.skippedAccounts.length; k++) {
+                results.errorDetails.push('Google Auth account #' + (k + 1) + ': ' + migrationResult.skippedAccounts[k]);
+              }
+            }
             
             for (var j = 0; j < migratedAccounts.length; j++) {
               // Check limit before adding
@@ -700,6 +708,7 @@ const CONFIG_HTML = `
             if (results.limitReached) break;
           } catch (e) {
             results.errors++;
+            results.errorDetails.push('Google Auth migration failed: ' + e.message);
           }
           continue;
         }
@@ -721,6 +730,8 @@ const CONFIG_HTML = `
           }
         } catch (e) {
           results.errors++;
+          var shortUrl = line.length > 50 ? line.substring(0, 50) + '...' : line;
+          results.errorDetails.push('Parse error: ' + e.message + ' (' + shortUrl + ')');
         }
       }
       
@@ -731,6 +742,20 @@ const CONFIG_HTML = `
       var resultDiv = document.getElementById('qr-result');
       if (resultDiv) {
         resultDiv.style.display = 'none';
+      }
+    }
+    
+    function showParseButton() {
+      var parseBtn = document.getElementById('parse-qr');
+      if (parseBtn) {
+        parseBtn.style.display = 'block';
+      }
+    }
+    
+    function hideParseButton() {
+      var parseBtn = document.getElementById('parse-qr');
+      if (parseBtn) {
+        parseBtn.style.display = 'none';
       }
     }
 
@@ -825,9 +850,19 @@ const CONFIG_HTML = `
       if (results.errors > 0) {
         if (resultText) resultText += '<br>';
         if (results.errors === 1) {
-          resultText += 'Parse error: 1 URL failed';
+          resultText += '<span style="color: #ff9800;">Parse error: 1 URL failed</span>';
         } else {
-          resultText += 'Parse errors: ' + results.errors + ' URLs failed';
+          resultText += '<span style="color: #ff9800;">Parse errors: ' + results.errors + ' URLs failed</span>';
+        }
+        
+        // Show error details
+        if (results.errorDetails && results.errorDetails.length > 0) {
+          resultText += '<br><div style="margin-top: 8px; padding: 8px; background: rgba(255,152,0,0.1); border-radius: 4px; font-size: 11px; text-align: left;">';
+          resultText += '<strong>Error details:</strong><br>';
+          for (var i = 0; i < results.errorDetails.length; i++) {
+            resultText += '• ' + escapeHtml(results.errorDetails[i]) + '<br>';
+          }
+          resultText += '</div>';
         }
       }
       if (results.limitReached) {
@@ -835,14 +870,23 @@ const CONFIG_HTML = `
         resultText += '<strong>Limit reached: ' + MAX_ACCOUNTS + ' accounts maximum</strong>';
       }
 
+      // Hide button and show result
+      hideParseButton();
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = resultText;
-      
-      setTimeout(hideQrResult, 5000);
 
       if (results.added > 0) {
         document.getElementById('qr-input').value = '';
         renderEntries();
+      }
+      
+      // If nothing was added and there were errors, show alert with details
+      if (results.added === 0 && results.errors > 0 && results.errorDetails.length > 0) {
+        var alertMsg = 'Import failed!\\n\\nErrors:\\n';
+        for (var i = 0; i < results.errorDetails.length; i++) {
+          alertMsg += '• ' + results.errorDetails[i] + '\\n';
+        }
+        alert(alertMsg);
       }
     }
 
@@ -858,6 +902,12 @@ const CONFIG_HTML = `
 
     // QR entry
     document.getElementById('parse-qr').addEventListener('click', addQrEntry);
+    
+    // Show parse button when user types in QR input
+    document.getElementById('qr-input').addEventListener('input', function() {
+      showParseButton();
+      hideQrResult();
+    });
 
     // Save button
     document.getElementById('save').addEventListener('click', function() {
