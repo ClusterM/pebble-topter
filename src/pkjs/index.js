@@ -371,7 +371,12 @@ const CONFIG_HTML = `
         }
         
         var data = params.data;
-        var bytes = atob(data);
+        var bytes;
+        try {
+          bytes = atob(data);
+        } catch (e) {
+          throw new Error('Invalid Base64 encoding in data parameter');
+        }
         
         var accounts = [];
         var pos = 0;
