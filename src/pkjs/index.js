@@ -384,6 +384,11 @@ const CONFIG_HTML = `
             var length = lengthResult.value;
             pos = lengthResult.pos;
             
+            if (pos + length > bytes.length) {
+              // Data length exceeds available bytes
+              throw new Error('Data length exceeds available bytes');
+            }
+            
             var value = bytes.substr(pos, length);
             pos += length;
             
@@ -396,9 +401,18 @@ const CONFIG_HTML = `
           } else if (wireType === 0) { // Varint
             var varintResult = readVarint(bytes, pos);
             pos = varintResult.pos;
+          } else if (wireType === 1) { // 64-bit
+            if (pos + 8 > bytes.length) {
+              throw new Error('Insufficient bytes for 64-bit field');
+            }
+            pos += 8;
+          } else if (wireType === 5) { // 32-bit
+            if (pos + 4 > bytes.length) {
+              throw new Error('Insufficient bytes for 32-bit field');
+            }
+            pos += 4;
           } else {
-            // Skip unknown wire types
-            pos++;
+            throw new Error('Unknown wire type: ' + wireType);
           }
         }
         
@@ -414,7 +428,7 @@ const CONFIG_HTML = `
       var issuer = '';
       var algorithm = 0;
       var digits = 6;
-      var type = 2; // TOTP
+      var type = 1; // TOTP (default)
       
       var pos = 0;
       while (pos < data.length) {
@@ -426,6 +440,11 @@ const CONFIG_HTML = `
           var lengthResult = readVarint(data, pos);
           var length = lengthResult.value;
           pos = lengthResult.pos;
+          
+          if (pos + length > data.length) {
+            // Data length exceeds available bytes
+            return null;
+          }
           
           var value = data.substr(pos, length);
           pos += length;
@@ -468,13 +487,22 @@ const CONFIG_HTML = `
           } else if (fieldNumber === 6) { // type
             type = value;
           }
+        } else if (wireType === 1) { // 64-bit
+          if (pos + 8 > data.length) {
+            return null;
+          }
+          pos += 8;
+        } else if (wireType === 5) { // 32-bit
+          if (pos + 4 > data.length) {
+            return null;
+          }
+          pos += 4;
         } else {
-          // Skip unknown wire types
-          pos++;
+          return null; // Unknown wire type
         }
       }
       
-      if (!secret || type !== 2) { // Only TOTP
+      if (!secret || type !== 1) { // Only TOTP
         return null;
       }
       
