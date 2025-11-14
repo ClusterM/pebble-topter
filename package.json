@@ -1,5 +1,5 @@
 {
-  "name": "TOTPer",
+  "name": "totper",
   "author": "Alexey Cluster",
   "version": "1.1.0",
   "keywords": ["pebble-app", "totp", "authenticator"],
