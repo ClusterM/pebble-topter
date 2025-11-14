@@ -87,13 +87,14 @@ const CONFIG_HTML = `
 
   <script>
   (function() {
+    var MAX_ACCOUNTS = 100;
     var initialData = decodeURIComponent('__INITIAL_DATA__');
     var entries = [];
     try {
       if (initialData) {
         var parsed = JSON.parse(initialData);
         if (Array.isArray(parsed)) {
-          entries = parsed;
+          entries = parsed.slice(0, MAX_ACCOUNTS);
         }
       }
     } catch (err) {
@@ -169,6 +170,11 @@ const CONFIG_HTML = `
         empty.textContent = 'No entries yet. Add your first TOTP account below.';
         entriesRoot.appendChild(empty);
       } else {
+        var header = document.createElement('p');
+        header.className = 'hint';
+        header.textContent = 'Accounts: ' + entries.length + ' / ' + MAX_ACCOUNTS;
+        entriesRoot.appendChild(header);
+        
         entries.forEach(function(entry, idx) {
           entriesRoot.appendChild(createEntryView(entry, idx));
         });
@@ -246,11 +252,17 @@ const CONFIG_HTML = `
     function processMultipleUrls(text) {
       var newline = String.fromCharCode(10);
       var lines = text.split(newline);
-      var results = { added: 0, skipped: 0, errors: 0 };
+      var results = { added: 0, skipped: 0, errors: 0, limitReached: false };
       
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
         if (!line) continue;
+        
+        // Check limit before processing
+        if (entries.length >= MAX_ACCOUNTS) {
+          results.limitReached = true;
+          break;
+        }
         
         try {
           var entry = parseOtpUri(line);
@@ -293,6 +305,11 @@ const CONFIG_HTML = `
     }
 
     function addManualEntry() {
+      if (entries.length >= MAX_ACCOUNTS) {
+        alert('Maximum limit of ' + MAX_ACCOUNTS + ' accounts reached!');
+        return;
+      }
+
       var label = document.getElementById('manual-label').value.trim();
       var account = document.getElementById('manual-account').value.trim();
       var secret = document.getElementById('manual-secret').value.trim().toUpperCase().replace(/[^A-Z2-7]/g, '');
@@ -364,6 +381,10 @@ const CONFIG_HTML = `
         } else {
           resultText += 'Parse errors: ' + results.errors + ' URLs failed';
         }
+      }
+      if (results.limitReached) {
+        if (resultText) resultText += '<br>';
+        resultText += '<strong>Limit reached: ' + MAX_ACCOUNTS + ' accounts maximum</strong>';
       }
 
       resultDiv.style.display = 'block';
