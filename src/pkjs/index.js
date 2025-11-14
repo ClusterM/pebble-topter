@@ -9,12 +9,73 @@ const CONFIG_HTML = `
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 16px; background: #121212; color: #f5f5f5; }
     h1 { font-size: 24px; margin: 0 0 20px; text-align: center; }
     .entries { margin-bottom: 20px; }
-    .entry { background: #1f1f1f; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; align-items: center; cursor: move; }
-    .entry.dragging { opacity: 0.5; }
+    .entry { 
+      background: #1f1f1f; 
+      border-radius: 12px; 
+      padding: 16px; 
+      margin-bottom: 12px; 
+      display: flex; 
+      align-items: center; 
+      cursor: move; 
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .entry:hover { 
+      background: #252525; 
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .entry.dragging { 
+      opacity: 0.4; 
+      transform: scale(0.95);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+    }
+    .entry.drag-over-top::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #2196F3;
+      border-radius: 2px;
+      box-shadow: 0 0 10px rgba(33, 150, 243, 0.8);
+      z-index: 10;
+    }
+    .entry.drag-over-bottom::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #2196F3;
+      border-radius: 2px;
+      box-shadow: 0 0 10px rgba(33, 150, 243, 0.8);
+      z-index: 10;
+    }
     .entry-content { flex: 1; }
     .entry-label { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
     .entry-account { font-size: 14px; color: #9e9e9e; }
-    .entry-remove { background: #f44336; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .entry-remove { 
+      background: #f44336; 
+      color: white; 
+      border: none; 
+      border-radius: 50%; 
+      width: 32px; 
+      height: 32px; 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-size: 18px;
+      transition: all 0.2s ease;
+    }
+    .entry-remove:hover {
+      background: #d32f2f;
+      transform: scale(1.1);
+    }
     .add-section { background: #2c2c2c; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
     .tabs { display: flex; margin-bottom: 16px; }
     .tab { background: #424242; color: #f5f5f5; border: none; padding: 12px 16px; cursor: pointer; border-radius: 8px 8px 0 0; }
@@ -34,7 +95,21 @@ const CONFIG_HTML = `
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .actions { position: sticky; bottom: 0; display: flex; justify-content: space-between; gap: 8px; padding-top: 12px; background: rgba(18,18,18,0.95); margin: -16px; padding: 16px; }
     .hint { font-size: 13px; color: #b0bec5; margin-bottom: 16px; text-align: center; }
-    .drag-handle { margin-right: 12px; color: #666; font-size: 18px; }
+    .drag-handle { 
+      margin-right: 12px; 
+      color: #666; 
+      font-size: 18px; 
+      cursor: grab;
+      transition: color 0.2s ease;
+      user-select: none;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+      color: #999;
+    }
+    .entry:hover .drag-handle {
+      color: #999;
+    }
   </style>
 </head>
 <body>
@@ -133,11 +208,45 @@ const CONFIG_HTML = `
         draggedElement = container;
         container.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', container.innerHTML);
       });
 
       container.addEventListener('dragend', function(e) {
         container.classList.remove('dragging');
+        // Clean up all drag-over classes
+        document.querySelectorAll('.entry').forEach(function(el) {
+          el.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
         draggedElement = null;
+      });
+
+      container.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        if (draggedElement && draggedElement !== container) {
+          // First, clean up all existing indicators
+          document.querySelectorAll('.entry').forEach(function(el) {
+            el.classList.remove('drag-over-top', 'drag-over-bottom');
+          });
+          
+          // Determine if we should show indicator on top or bottom
+          var draggedIndex = parseInt(draggedElement.dataset.index);
+          var targetIndex = parseInt(container.dataset.index);
+          
+          if (draggedIndex < targetIndex) {
+            container.classList.add('drag-over-bottom');
+          } else {
+            container.classList.add('drag-over-top');
+          }
+        }
+      });
+
+      container.addEventListener('dragleave', function(e) {
+        // Only remove classes if we're actually leaving the container
+        var rect = container.getBoundingClientRect();
+        if (e.clientX < rect.left || e.clientX >= rect.right ||
+            e.clientY < rect.top || e.clientY >= rect.bottom) {
+          container.classList.remove('drag-over-top', 'drag-over-bottom');
+        }
       });
 
       container.addEventListener('dragover', function(e) {
@@ -147,6 +256,8 @@ const CONFIG_HTML = `
 
       container.addEventListener('drop', function(e) {
         e.preventDefault();
+        container.classList.remove('drag-over-top', 'drag-over-bottom');
+        
         if (draggedElement && draggedElement !== container) {
           var draggedIndex = parseInt(draggedElement.dataset.index);
           var targetIndex = parseInt(container.dataset.index);
