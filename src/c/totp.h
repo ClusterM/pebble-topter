@@ -13,6 +13,12 @@
 #define MIN_DIGITS 6
 #define MAX_DIGITS 8
 
+typedef enum {
+  TOTP_ALGO_SHA1 = 0,
+  TOTP_ALGO_SHA256 = 1,
+  TOTP_ALGO_SHA512 = 2
+} TotpAlgorithm;
+
 typedef struct {
   char label[LABEL_MAX_LEN + 1];
   char account_name[ACCOUNT_NAME_MAX_LEN + 1];
@@ -20,6 +26,7 @@ typedef struct {
   size_t secret_len;
   uint32_t period;
   uint8_t digits;
+  uint8_t algorithm;  // TotpAlgorithm
 } TotpAccount;
 
 // Generate TOTP code

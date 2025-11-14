@@ -183,7 +183,8 @@ const CONFIG_HTML = `
 
     function buildPayload(list) {
       return list.map(function(item) {
-        return [item.label, item.account_name, item.secret, item.period, item.digits].join('|');
+        var algo = item.algorithm !== undefined ? item.algorithm : 0;
+        return [item.label, item.account_name, item.secret, item.period, item.digits, algo].join('|');
       }).join(';');
     }
 
@@ -220,6 +221,15 @@ const CONFIG_HTML = `
         var secret = (params.secret || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
         var digits = parseInt(params.digits, 10) || 6;
         var period = parseInt(params.period, 10) || 30;
+        
+        // Parse algorithm (SHA1, SHA256, SHA512)
+        var algorithmStr = (params.algorithm || 'SHA1').toUpperCase();
+        var algorithm = 0;  // Default to SHA1
+        if (algorithmStr === 'SHA256') {
+          algorithm = 1;
+        } else if (algorithmStr === 'SHA512') {
+          algorithm = 2;
+        }
 
         if (!secret) {
           throw new Error('No secret found');
@@ -236,7 +246,8 @@ const CONFIG_HTML = `
           account_name: account,
           secret: secret,
           period: period,
-          digits: digits
+          digits: digits,
+          algorithm: algorithm
         };
       } catch (err) {
         throw new Error('Invalid otpauth URL: ' + err.message);
@@ -324,7 +335,8 @@ const CONFIG_HTML = `
         account_name: account,
         secret: secret,
         period: 30,
-        digits: 6
+        digits: 6,
+        algorithm: 0  // Default to SHA1
       };
 
       if (isDuplicate(newEntry)) {

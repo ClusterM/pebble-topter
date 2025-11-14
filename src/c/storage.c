@@ -10,6 +10,7 @@ typedef struct {
   uint8_t secret[SECRET_BYTES_MAX];
   uint16_t period;
   uint8_t digits;
+  uint8_t algorithm;  // TotpAlgorithm
 } __attribute__((__packed__)) PersistedAccount;
 
 #ifdef DEBUG
@@ -20,7 +21,7 @@ static void prv_create_fake_account(size_t id, TotpAccount *account) {
   // Base32 test secret: "JBSWY3DPEHPK3PXP" = "Hello!" in bytes
   const uint8_t test_secret[] = {0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x21};
   
-  switch (id) {
+  switch (id % 6) {
     case 0:
       strncpy(account->label, "GitHub", sizeof(account->label) - 1);
       strncpy(account->account_name, "user@example.com", sizeof(account->account_name) - 1);
@@ -28,6 +29,7 @@ static void prv_create_fake_account(size_t id, TotpAccount *account) {
       account->secret_len = sizeof(test_secret);
       account->period = 30;
       account->digits = 6;
+      account->algorithm = TOTP_ALGO_SHA1;
       break;
       
     case 1:
@@ -37,6 +39,7 @@ static void prv_create_fake_account(size_t id, TotpAccount *account) {
       account->secret_len = sizeof(test_secret);
       account->period = 30;
       account->digits = 6;
+      account->algorithm = TOTP_ALGO_SHA1;
       break;
       
     case 2:
@@ -55,6 +58,7 @@ static void prv_create_fake_account(size_t id, TotpAccount *account) {
       account->secret_len = sizeof(test_secret);
       account->period = 30;
       account->digits = 6;
+      account->algorithm = TOTP_ALGO_SHA1;
       break;
       
     case 4:
@@ -73,6 +77,7 @@ static void prv_create_fake_account(size_t id, TotpAccount *account) {
       account->secret_len = sizeof(test_secret);
       account->period = 30;
       account->digits = 6;
+      account->algorithm = TOTP_ALGO_SHA1;
       break;
   }
 }
@@ -81,7 +86,7 @@ static void prv_create_fake_account(size_t id, TotpAccount *account) {
 // Get account count
 size_t storage_get_count(void) {
 #ifdef DEBUG
-  return 5;
+  return DEBUG_ACCOUNTS;
 #else
   if (!persist_exists(PERSIST_KEY_COUNT)) {
     return 0;
@@ -100,7 +105,7 @@ bool storage_load_account(size_t id, TotpAccount *account) {
   if (!account) return false;
 
 #ifdef DEBUG
-  if (id >= 5) {
+  if (id >= DEBUG_ACCOUNTS) {
     return false;
   }
   prv_create_fake_account(id, account);
@@ -124,6 +129,7 @@ bool storage_load_account(size_t id, TotpAccount *account) {
   memcpy(account->secret, data.secret, account->secret_len);
   account->period = data.period > 0 ? data.period : DEFAULT_PERIOD;
   account->digits = data.digits >= MIN_DIGITS && data.digits <= MAX_DIGITS ? data.digits : DEFAULT_DIGITS;
+  account->algorithm = (data.algorithm <= TOTP_ALGO_SHA512) ? data.algorithm : TOTP_ALGO_SHA1;
 
   return true;
 #endif
@@ -141,6 +147,7 @@ bool storage_save_account(size_t id, const TotpAccount *account) {
   memcpy(data.secret, account->secret, account->secret_len);
   data.period = account->period;
   data.digits = account->digits;
+  data.algorithm = account->algorithm;
 
   uint32_t key = PERSIST_KEY_ACCOUNTS_START + id;
   return persist_write_data(key, &data, sizeof(data)) == sizeof(data);

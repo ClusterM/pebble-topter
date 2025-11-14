@@ -62,11 +62,18 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     period_str++;
   }
   char *digits_str = NULL;
+  char *algorithm_str = NULL;
   if (period_str) {
     digits_str = strchr(period_str, '|');
     if (digits_str) {
       *digits_str = '\0';
       digits_str++;
+      
+      algorithm_str = strchr(digits_str, '|');
+      if (algorithm_str) {
+        *algorithm_str = '\0';
+        algorithm_str++;
+      }
     }
   }
 
@@ -122,6 +129,17 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
     }
   }
 
+  if (algorithm_str) {
+    trim_ptr = algorithm_str;
+    while (*trim_ptr == ' ' || *trim_ptr == '\t') trim_ptr++;
+    memmove(algorithm_str, trim_ptr, strlen(trim_ptr) + 1);
+    trim_ptr = algorithm_str + strlen(algorithm_str) - 1;
+    while (trim_ptr >= algorithm_str && (*trim_ptr == ' ' || *trim_ptr == '\t')) {
+      *trim_ptr = '\0';
+      trim_ptr--;
+    }
+  }
+
   if (label[0] == '\0' || secret[0] == '\0') {
     return false;
   }
@@ -148,6 +166,10 @@ static bool prv_parse_line(const char *line, TotpAccount *out_account) {
   account.digits = digits_str && digits_str[0] ? (uint8_t)atoi(digits_str) : DEFAULT_DIGITS;
   if (account.digits < MIN_DIGITS || account.digits > MAX_DIGITS) {
     account.digits = DEFAULT_DIGITS;
+  }
+  account.algorithm = algorithm_str && algorithm_str[0] ? (uint8_t)atoi(algorithm_str) : TOTP_ALGO_SHA1;
+  if (account.algorithm > TOTP_ALGO_SHA512) {
+    account.algorithm = TOTP_ALGO_SHA1;
   }
 
   *out_account = account;
