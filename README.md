@@ -4,6 +4,8 @@
 
 A powerful, standalone Time-based One-Time Password (TOTP) authenticator for Pebble smartwatches that doesn't require a companion app on your phone.
 
+https://github.com/user-attachments/assets/e2028098-7e01-42e9-a8fd-b8e6fa8466bb
+
 
 ## ⚠️ DISCLAIMER
 
