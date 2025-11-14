@@ -115,14 +115,13 @@ If you experience "Out of memory" errors, try reducing the number of accounts. T
 - If storage is full, remove some unused accounts
 
 
-## License
-
-This project is open source. See LICENSE file for details.
-
-
 ## Download
 * You can always find the latest release at: https://github.com/ClusterM/pebble-topter/releases
 * Appstore download will be available soon
+
+## License
+
+This project is licensed under GPLv3 license. See LICENSE file for details.
 
 
 ## Support the Developer and the Project
