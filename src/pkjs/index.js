@@ -324,13 +324,27 @@ const CONFIG_HTML = `
     // Parse Google Authenticator migration format
     function parseGoogleAuthMigration(text) {
       try {
-        // Extract data parameter
-        var match = text.match(/otpauth-migration:\\/\\/offline\\?data=([^&\\s]+)/);
-        if (!match) {
-          throw new Error('Invalid migration URL');
+        // Parse URL
+        var url = new URL(text);
+        if (url.protocol !== 'otpauth-migration:') {
+          throw new Error('Not an otpauth-migration URL');
         }
         
-        var data = decodeURIComponent(match[1]);
+        if (url.hostname !== 'offline') {
+          throw new Error('Only offline migration is supported');
+        }
+        
+        // Extract data parameter
+        var params = {};
+        url.searchParams.forEach(function(value, key) {
+          params[key.toLowerCase()] = value;
+        });
+        
+        if (!params.data) {
+          throw new Error('No data parameter found');
+        }
+        
+        var data = params.data;
         var bytes = atob(data);
         
         var accounts = [];
