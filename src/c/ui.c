@@ -302,6 +302,9 @@ void ui_reload_window(void) {
     s_empty_layer = NULL;
   }
   
+  // account_cache is NOT freed here because it's still needed
+  // It will be reused with the same accounts
+  
   // Reload window content with new settings
   Layer *window_layer = window_get_root_layer(s_window);
   GRect bounds = layer_get_bounds(window_layer);
@@ -464,6 +467,9 @@ void ui_deinit(void) {
     window_destroy(s_window);
     s_window = NULL;
   }
+  
+  // Free account cache to prevent memory leak
+  prv_free_account_cache();
 }
 
 

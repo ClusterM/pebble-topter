@@ -293,20 +293,14 @@ static void prv_window_load(Window *window) {
 static void prv_window_unload(Window *window) {
   SettingsWindow *settings = window_get_user_data(window);
   
+  // Only destroy menu_layer here, as it's created in prv_window_load
   if (settings->menu_layer) {
     menu_layer_destroy(settings->menu_layer);
     settings->menu_layer = NULL;
   }
   
-  if (settings->pin_window) {
-    pin_window_destroy(settings->pin_window);
-    settings->pin_window = NULL;
-  }
-  
-  if (settings->info_window) {
-    window_destroy(settings->info_window);
-    settings->info_window = NULL;
-  }
+  // Note: pin_window and info_window are NOT destroyed here
+  // They are created on-demand and will be cleaned up in settings_window_destroy
 }
 
 // ============================================================================
@@ -342,6 +336,19 @@ SettingsWindow* settings_window_create(void) {
 void settings_window_destroy(SettingsWindow *settings_window) {
   if (!settings_window) return;
   
+  // Clean up pin window if it exists
+  if (settings_window->pin_window) {
+    pin_window_destroy(settings_window->pin_window);
+    settings_window->pin_window = NULL;
+  }
+  
+  // Clean up info window if it exists
+  if (settings_window->info_window) {
+    window_destroy(settings_window->info_window);
+    settings_window->info_window = NULL;
+  }
+  
+  // Clean up main window
   if (settings_window->window) {
     window_destroy(settings_window->window);
   }
