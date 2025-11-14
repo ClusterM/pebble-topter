@@ -123,7 +123,7 @@ static void prv_menu_draw_header_callback(GContext* ctx, const Layer *cell_layer
 }
 
 static void prv_menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
-  bool has_pin = storage_is_pin_enabled();
+  bool has_pin = storage_has_pin();
   bool statusbar_enabled = storage_is_statusbar_enabled();
   
   switch (cell_index->row) {

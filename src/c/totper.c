@@ -60,7 +60,7 @@ static void prv_init(void) {
   ui_set_total_count(s_total_account_count);
  
   // Check if PIN is enabled
-  if (storage_is_pin_enabled()) {
+  if (storage_has_pin()) {
     s_pin_verified = false;
     s_pin_attempts = 0;
     
