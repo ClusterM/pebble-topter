@@ -32,7 +32,14 @@
       "configurable"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "MENU_ICON",
+          "file": "images/icon.png",
+          "menuIcon": true
+        }
+      ]
     }
   }
 }
