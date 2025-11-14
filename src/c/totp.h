@@ -4,8 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define MAX_ACCOUNTS 64
-#define NAME_MAX_LEN 32
+#define LABEL_MAX_LEN 32
+#define ACCOUNT_NAME_MAX_LEN 32
 #define SECRET_BASE32_MAX_LEN 64
 #define SECRET_BYTES_MAX 64
 #define DEFAULT_PERIOD 30
@@ -14,8 +14,8 @@
 #define MAX_DIGITS 8
 
 typedef struct {
-  char label[NAME_MAX_LEN + 1];
-  char account_name[NAME_MAX_LEN + 1];
+  char label[LABEL_MAX_LEN + 1];
+  char account_name[ACCOUNT_NAME_MAX_LEN + 1];
   uint8_t secret[SECRET_BYTES_MAX];
   size_t secret_len;
   uint32_t period;
