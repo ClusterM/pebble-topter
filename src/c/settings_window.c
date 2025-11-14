@@ -233,6 +233,12 @@ static void prv_info_window_load(Window *window) {
   
   // Create text layer for system info
   settings->info_text_layer = text_layer_create(GRect(5, 10, bounds.size.w - 10, bounds.size.h - 20));
+  if (!settings->info_text_layer) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create info text layer");
+    window_destroy(settings->info_window);
+    settings->info_window = NULL;
+    return;
+  }
   text_layer_set_font(settings->info_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(settings->info_text_layer, GTextAlignmentLeft);
   text_layer_set_overflow_mode(settings->info_text_layer, GTextOverflowModeWordWrap);
@@ -277,6 +283,10 @@ static void prv_window_load(Window *window) {
   
   // Create menu layer
   settings->menu_layer = menu_layer_create(bounds);
+  if (!settings->menu_layer) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create menu layer");
+    return;
+  }
   menu_layer_set_callbacks(settings->menu_layer, settings, (MenuLayerCallbacks){
     .get_num_sections = prv_menu_get_num_sections_callback,
     .get_num_rows = prv_menu_get_num_rows_callback,

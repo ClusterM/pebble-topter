@@ -2,6 +2,7 @@
 #include "totp.h"
 #include "storage.h"
 #include "settings_window.h"
+#include "config.h"
 #include <string.h>
 
 // Forward declarations
@@ -15,6 +16,7 @@ StatusBarLayer *s_status_bar;
 size_t s_total_account_count;
 AccountCache *s_account_cache;
 static bool s_is_loading = false;
+static bool s_out_of_memory = false;
 static SettingsWindow *s_settings_window = NULL;
 
 // ============================================================================
@@ -29,6 +31,7 @@ static void prv_load_account(size_t index) {
   
   cache->account = malloc(sizeof(TotpAccount));
   if (!cache->account) {
+    s_out_of_memory = true;
     return;
   }
   
@@ -63,11 +66,29 @@ static void prv_init_account_cache(void) {
   
   s_account_cache = calloc(s_total_account_count, sizeof(AccountCache));
   if (!s_account_cache) {
-    return;
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Out of memory");
+    s_total_account_count = 0;
+    s_out_of_memory = true;
   }
   
   for (size_t i = 0; i < s_total_account_count; i++) {
     prv_load_account(i);
+    if (heap_bytes_free() < MEMORY_CRITICAL_LEVEL) { // some extra memory for other stuff
+      s_out_of_memory = true;
+    }
+    if (s_out_of_memory) {
+      APP_LOG(APP_LOG_LEVEL_ERROR, "Out of memory, only %d accounts loaded", (int)i);
+      // Free only successfully loaded accounts (0 to i-1)
+      for (size_t j = 0; j < i; j++) {
+        if (s_account_cache[j].account) {
+          free(s_account_cache[j].account);
+        }
+      }
+      free(s_account_cache);
+      s_account_cache = NULL;
+      s_total_account_count = 0;
+      break;
+    }
   }
 }
 
@@ -224,7 +245,9 @@ static void prv_update_empty_state(void) {
   // Update empty layer text based on loading state
   char const *text = "";
   if (!has_accounts) {
-    if (s_is_loading) {
+    if (s_out_of_memory) {
+      text = "Out of memory.\nPlease remove some accounts.";
+    } else if (s_is_loading) {
       text = "Loading...";
     } else {
       text = "No accounts.\nAdd on the phone.";

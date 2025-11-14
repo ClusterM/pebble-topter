@@ -66,6 +66,12 @@ PinWindow* pin_window_create(PinWindowCallbacks callbacks, void *context) {
   // Main TextLayer
   const GEdgeInsets main_text_insets = {.top = 30};
   pin_window->main_text = text_layer_create(grect_inset(bounds, main_text_insets));
+  if (!pin_window->main_text) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create main text layer");
+    window_destroy(pin_window->window);
+    free(pin_window);
+    return NULL;
+  }
   text_layer_set_text(pin_window->main_text, "PIN Required");
   text_layer_set_font(pin_window->main_text, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(pin_window->main_text, GTextAlignmentCenter);
@@ -74,6 +80,13 @@ PinWindow* pin_window_create(PinWindowCallbacks callbacks, void *context) {
   // Sub TextLayer
   const GEdgeInsets sub_text_insets = {.top = 115, .right = 5, .bottom = 10, .left = 5};
   pin_window->sub_text = text_layer_create(grect_inset(bounds, sub_text_insets));
+  if (!pin_window->sub_text) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create sub text layer");
+    text_layer_destroy(pin_window->main_text);
+    window_destroy(pin_window->window);
+    free(pin_window);
+    return NULL;
+  }
   text_layer_set_text(pin_window->sub_text, "Enter your PIN");
   text_layer_set_text_alignment(pin_window->sub_text, GTextAlignmentCenter);
   text_layer_set_font(pin_window->sub_text, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
@@ -87,6 +100,14 @@ PinWindow* pin_window_create(PinWindowCallbacks callbacks, void *context) {
     (bounds.size.w - PIN_WINDOW_SIZE.w) / 2
   );
   pin_window->selection = selection_layer_create(grect_inset(bounds, selection_insets), PIN_WINDOW_NUM_CELLS);
+  if (!pin_window->selection) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create selection layer");
+    text_layer_destroy(pin_window->sub_text);
+    text_layer_destroy(pin_window->main_text);
+    window_destroy(pin_window->window);
+    free(pin_window);
+    return NULL;
+  }
   
   for (int i = 0; i < PIN_WINDOW_NUM_CELLS; i++) {
     selection_layer_set_cell_width(pin_window->selection, i, 40);
@@ -105,6 +126,15 @@ PinWindow* pin_window_create(PinWindowCallbacks callbacks, void *context) {
 
   // Create status bar
   pin_window->status = status_bar_layer_create();
+  if (!pin_window->status) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create status bar");
+    selection_layer_destroy(pin_window->selection);
+    text_layer_destroy(pin_window->sub_text);
+    text_layer_destroy(pin_window->main_text);
+    window_destroy(pin_window->window);
+    free(pin_window);
+    return NULL;
+  }
   status_bar_layer_set_colors(pin_window->status, GColorClear, GColorBlack);
   layer_add_child(window_layer, status_bar_layer_get_layer(pin_window->status));
   

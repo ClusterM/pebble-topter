@@ -12,7 +12,8 @@ TOTPer should not be your only authenticator. Why? I cannot take responsibility 
 - **No Companion App Required**: TOTPer uses a local HTML page for settings
 - **Fast Loading**: Optimized for quick startup and instant code generation
 - **QR Code Parsing**: Paste QR code URLs in the phone configuration page (Pebble app has no camera access)
-- **Supports Many Accounts**: Up to 100 accounts
+- **Supports Many Accounts**: Up to ~20 accounts on original Pebble, up to 100 accounts on newer models
+- **Multiple Hash Algorithms**: SHA1, SHA256, and SHA512 support
 - **PIN Code Protection**: Optional 3-digit PIN code (000-999) to prevent unauthorized access
 - **Standalone Operation**: No Internet access required at all, neither for the settings page nor during usage
 - **Clean Design**: Simple, intuitive interface focused on readability
@@ -85,6 +86,13 @@ A: Any service supporting TOTP (most 2FA systems): Google, GitHub, Microsoft, Fa
 
 **Q: Does this work with HOTP?**  
 A: No, only TOTP (Time-based OTP) is supported, not HOTP (counter-based HMAC OTP).
+
+**Q: How many accounts can I store?**  
+A: The limit depends on your watch model due to RAM constraints:
+- **Original Pebble (Aplite)**: ~20 accounts (24KB RAM)
+- **Newer models (Basalt, Chalk, Diorite, Emery)**: Up to 100 accounts
+
+If you experience "Out of memory" errors, try reducing the number of accounts. The app will display a warning if memory is insufficient.
 
 ## Troubleshooting
 
