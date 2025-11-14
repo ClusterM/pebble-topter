@@ -1,5 +1,7 @@
 # TOTPer - TOTP Authenticator for Pebble
 
+[![Build Status](https://github.com/ClusterM/pebble-topter/workflows/Build%20Pebble%20App/badge.svg)](https://github.com/ClusterM/pebble-topter/actions)
+
 A powerful, standalone Time-based One-Time Password (TOTP) authenticator for Pebble smartwatches that doesn't require a companion app on your phone.
 
 

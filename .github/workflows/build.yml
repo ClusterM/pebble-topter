@@ -1,0 +1,58 @@
+name: Build Pebble App
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  release:
+    types: [ created ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install python3-pip python3-venv nodejs npm libsdl1.2debian libfdt1
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv tool install pebble-tool
+
+    - name: Install Pebble SDK
+      run: |
+        pebble sdk install latest
+      
+    # - name: Disable analytics prompt
+    #   run: |
+    #     mkdir -p ~/.pebble-sdk
+    #     touch ~/.pebble-sdk/NO_TRACKING
+      
+    - name: Build Pebble app
+      run: |
+        pebble build
+        
+    - name: List build artifacts
+      run: |
+        ls -lh build/
+        file build/pebble-topter.pbw
+        
+    - name: Upload build artifact (with commit SHA)
+      uses: actions/upload-artifact@v4
+      with:
+        name: topter-${{ github.sha }}
+        path: build/pebble-topter.pbw
+        retention-days: 90
+        
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/pebble-topter.pbw
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
