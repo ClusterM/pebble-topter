@@ -333,7 +333,7 @@ const CONFIG_HTML = `
       var byte;
       
       do {
-        if (shift >= 35) {
+        if (shift >= 28) {
           throw new Error('Varint too large');
         }
         if (pos >= bytes.length) {
@@ -454,11 +454,20 @@ const CONFIG_HTML = `
           
           if (fieldNumber === 1) { // secret
             // Convert bytes to base32
-            var hex = '';
+            var hexArray = [];
             for (var i = 0; i < value.length; i++) {
-              hex += value.charCodeAt(i).toString(16).padStart(2, '0');
+              hexArray.push(value.charCodeAt(i).toString(16).padStart(2, '0'));
             }
-            secret = hexToBase32(hex);
+            var hex = hexArray.join('');
+            
+            var base32Secret = hexToBase32(hex);
+            
+            // Validate Base32: not empty, only A-Z, 2-7, and =
+            if (!base32Secret || !/^[A-Z2-7=]+$/.test(base32Secret)) {
+              return null;
+            }
+            
+            secret = base32Secret;
           } else if (fieldNumber === 2) { // name
             name = value;
           } else if (fieldNumber === 3) { // issuer
@@ -531,22 +540,26 @@ const CONFIG_HTML = `
     
     function hexToBase32(hex) {
       var base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-      var bits = '';
+      var bitsArray = [];
       
       for (var i = 0; i < hex.length; i += 2) {
         var byte = parseInt(hex.substr(i, 2), 16);
-        bits += byte.toString(2).padStart(8, '0');
+        bitsArray.push(byte.toString(2).padStart(8, '0'));
       }
       
-      var base32 = '';
+      var bits = bitsArray.join('');
+      
+      var base32Array = [];
       for (var i = 0; i < bits.length; i += 5) {
         var chunk = bits.substr(i, 5);
         // Pad remaining bits with zeros on the right if less than 5 bits
         if (chunk.length < 5) {
           chunk = chunk.padEnd(5, '0');
         }
-        base32 += base32chars[parseInt(chunk, 2)];
+        base32Array.push(base32chars[parseInt(chunk, 2)]);
       }
+      
+      var base32 = base32Array.join('');
       
       // Add padding if needed (Base32 padding to 8-character blocks)
       while (base32.length % 8 !== 0) {
