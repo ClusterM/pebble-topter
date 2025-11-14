@@ -379,6 +379,7 @@ const CONFIG_HTML = `
         }
         
         var accounts = [];
+        var skippedCount = 0;
         var pos = 0;
         
         // Protobuf parser for Google Authenticator format
@@ -401,9 +402,12 @@ const CONFIG_HTML = `
             pos += length;
             
             if (fieldNumber === 1) { // otp_parameters
-              var account = parseOtpParameters(value);
-              if (account) {
+              try {
+                var account = parseOtpParameters(value);
                 accounts.push(account);
+              } catch (e) {
+                // Account validation failed, count as skipped
+                skippedCount++;
               }
             }
           } else if (wireType === 0) { // Varint
@@ -424,7 +428,7 @@ const CONFIG_HTML = `
           }
         }
         
-        return accounts;
+        return { accounts: accounts, skipped: skippedCount };
       } catch (err) {
         throw new Error('Failed to parse Google Auth migration: ' + err.message);
       }
@@ -451,7 +455,7 @@ const CONFIG_HTML = `
           
           if (pos + length > data.length) {
             // Data length exceeds available bytes
-            return null;
+            throw new Error('Data length exceeds available bytes in OTP parameters');
           }
           
           var value = data.substr(pos, length);
@@ -469,7 +473,7 @@ const CONFIG_HTML = `
             
             // Validate Base32: not empty, only A-Z, 2-7, and =
             if (!base32Secret || !/^[A-Z2-7=]+$/.test(base32Secret)) {
-              return null;
+              throw new Error('Invalid secret encoding');
             }
             
             secret = base32Secret;
@@ -484,43 +488,49 @@ const CONFIG_HTML = `
           pos = varintResult.pos;
           
           if (fieldNumber === 4) { // algorithm
-            // Only accept valid proto enum values: 1=SHA1, 2=SHA256, 3=SHA512
-            if (value >= 1 && value <= 3) {
-              algorithm = value - 1;
+            // Accept valid proto enum values: 0=UNSPECIFIED (defaults to SHA1), 1=SHA1, 2=SHA256, 3=SHA512
+            if (value >= 0 && value <= 3) {
+              algorithm = value > 0 ? value - 1 : 0;
             } else {
               // Invalid algorithm value, reject input
-              return null;
+              throw new Error('Invalid algorithm value: ' + value);
             }
           } else if (fieldNumber === 5) { // digits
-            // Only accept valid proto enum values: 1=6 digits, 2=8 digits
-            if (value === 1) {
+            // Accept valid proto enum values: 0=UNSPECIFIED (defaults to 6), 1=6 digits, 2=8 digits
+            if (value === 0) {
+              digits = 6; // DIGIT_COUNT_UNSPECIFIED, use default
+            } else if (value === 1) {
               digits = 6;
             } else if (value === 2) {
               digits = 8;
             } else {
               // Invalid digits value, reject input
-              return null;
+              throw new Error('Invalid digits value: ' + value);
             }
           } else if (fieldNumber === 6) { // type
             type = value;
           }
         } else if (wireType === 1) { // 64-bit
           if (pos + 8 > data.length) {
-            return null;
+            throw new Error('Insufficient bytes for 64-bit field in OTP parameters');
           }
           pos += 8;
         } else if (wireType === 5) { // 32-bit
           if (pos + 4 > data.length) {
-            return null;
+            throw new Error('Insufficient bytes for 32-bit field in OTP parameters');
           }
           pos += 4;
         } else {
-          return null; // Unknown wire type
+          throw new Error('Unknown wire type in OTP parameters: ' + wireType);
         }
       }
       
-      if (!secret || type !== 1) { // Only TOTP
-        return null;
+      if (!secret) {
+        throw new Error('No secret found in OTP parameters');
+      }
+      
+      if (type !== 1) { // Only TOTP
+        throw new Error('Only TOTP is supported (type: ' + type + ')');
       }
       
       // Parse name to extract account if needed
@@ -658,7 +668,12 @@ const CONFIG_HTML = `
         // Check if it's a Google Authenticator migration URL
         if (line.startsWith('otpauth-migration://')) {
           try {
-            var migratedAccounts = parseGoogleAuthMigration(line);
+            var migrationResult = parseGoogleAuthMigration(line);
+            var migratedAccounts = migrationResult.accounts;
+            
+            // Add skipped accounts from parsing to error count
+            results.errors += migrationResult.skipped;
+            
             for (var j = 0; j < migratedAccounts.length; j++) {
               // Check limit before adding
               if (entries.length >= MAX_ACCOUNTS) {
@@ -952,4 +967,5 @@ Pebble.addEventListener('webviewclosed', e => {
 Pebble.addEventListener('appmessage', () => {
   // Message handling not needed for unidirectional sync
 });
+
 
