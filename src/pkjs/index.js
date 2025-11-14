@@ -206,17 +206,25 @@ const CONFIG_HTML = `
     var entriesRoot = document.getElementById('entries');
     var draggedElement = null;
 
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     function createEntryView(entry, index) {
       var container = document.createElement('div');
       container.className = 'entry';
       container.dataset.index = index;
       container.draggable = true;
 
+      // Use escapeHtml to prevent XSS when rendering user-controlled data
       container.innerHTML = [
         '<span class="drag-handle">⋮⋮</span>',
         '<div class="entry-content">',
-          '<div class="entry-label">' + (entry.label || 'Unnamed') + '</div>',
-          '<div class="entry-account">' + (entry.account_name || '') + '</div>',
+          '<div class="entry-label">' + escapeHtml(entry.label || 'Unnamed') + '</div>',
+          '<div class="entry-account">' + escapeHtml(entry.account_name || '') + '</div>',
         '</div>',
         '<button type="button" class="entry-remove">×</button>'
       ].join('');
