@@ -16,6 +16,7 @@ TOTPer should not be your only authenticator. Why? I cannot take responsibility 
 - **No Companion App Required**: TOTPer uses a local HTML page for settings
 - **Fast Loading**: Optimized for quick startup and instant code generation
 - **QR Code Parsing**: Paste QR code URLs in the phone configuration page (Pebble app has no camera access)
+- **Google Authenticator Import**: Import all accounts at once from Google Authenticator export
 - **Supports Many Accounts**: Up to ~20 accounts on original Pebble, up to 100 accounts on newer models
 - **Multiple Hash Algorithms**: SHA1, SHA256, and SHA512 support
 - **PIN Code Protection**: Optional 3-digit PIN code (000-999) to prevent unauthorized access
@@ -37,9 +38,32 @@ TOTPer should not be your only authenticator. Why? I cannot take responsibility 
 5. Paste the copied code into the text field (you can paste multiple codes at once)
 6. Click "Parse & Add Entries"
 7. Repeat for additional codes if needed
-8. Click "Send to Watch" to sync with your watch
+8. Click "Send to the Watch" to sync with your watch
 
-#### Method 2: Manual Entry
+#### Method 2: Google Authenticator Export (Fastest for Multiple Accounts)
+
+**If you're already using Google Authenticator**, you can export all your accounts at once:
+
+1. Open Google Authenticator on your phone
+2. Tap the **⋮** (three dots) menu → **Transfer accounts** → **Export accounts**
+3. Select the accounts you want to export
+4. Google Authenticator will display one or more QR codes (if you have many accounts, it will split them into multiple QR codes)
+5. Scan it, somehow... This can be tricky since the QR is on your phone itself. This is one way to do it:
+   - Take a screenshot and display it on your computer, then scan with another device
+   - Or use a second phone/tablet to scan it
+   - Or use your computer's webcam if you can display the QR code there
+   - Copy the scanned link (it starts with `otpauth-migration://`)
+   - If there are multiple QR codes, scan each one
+6. Open TOTPer settings in the Pebble app
+7. Click the "QR Code" tab
+8. Paste the copied link(s) into the text field (one per line if you have multiple)
+9. Click "Parse & Add Entries"
+10. All accounts will be imported at once!
+11. Click "Send to the Watch" to sync with your watch
+
+**Note:** If Google Authenticator shows multiple QR codes, you need to scan each one and paste all the links (one per line).
+
+#### Method 3: Manual Entry
 1. Open TOTPer settings in the Pebble app
 2. Click the "Manual Entry" tab
 3. Enter the following details:
@@ -47,7 +71,7 @@ TOTPer should not be your only authenticator. Why? I cannot take responsibility 
    - **Account Name**: Your username/email (optional)
    - **Secret**: The base32-encoded secret key
 4. Click "Add Entry"
-5. Click "Send to Watch" to sync with your watch
+5. Click "Send to the Watch" to sync with your watch
 
 ### Viewing Codes
 

@@ -125,14 +125,41 @@ const CONFIG_HTML = `
     <div id="qr" class="tab-content active">
       <div class="qr-section">
         <p style="font-weight: bold;">QR Code Import</p>
-        <p style="font-size: 12px; color: #b0bec5; line-height: 1.4; margin-bottom: 12px; text-align: left;">
-          1. Use any QR scanner app to scan the 2FA QR code<br>
-          2. Copy the scanned text (starts with "otpauth://totp/")<br>
-          3. Paste it into the field below
-        </p>
+        
+        <details style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+          <summary style="cursor: pointer; font-weight: bold; font-size: 13px; text-align: left; margin-bottom: 0;">How to import a regular QR Code</summary>
+          <div style="font-size: 12px; color: #b0bec5; line-height: 1.6; padding-left: 8px; margin-top: 8px; text-align: left;">
+            1. Switch to your camera (or other QR code scanner application) and scan the QR code<br>
+            2. Copy the scanned data as a text string (it should start with <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 2px;">otpauth://</code>)<br>
+            3. Paste the copied code into the text field (you can paste multiple codes at once)
+          </div>
+        </details>
+        
+        <details style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+          <summary style="cursor: pointer; font-weight: bold; font-size: 13px; text-align: left; margin-bottom: 0;">How to import from Google Authenticator</summary>
+          <div style="font-size: 12px; color: #b0bec5; line-height: 1.6; padding-left: 8px; margin-top: 8px; text-align: left;">
+            <strong>If you're already using Google Authenticator</strong>, you can export all your accounts at once:<br><br>
+            
+            1. Open Google Authenticator<br>
+            2. Tap the <strong>⋮</strong> (three dots) menu → <strong>Transfer accounts</strong> → <strong>Export accounts</strong><br>
+            3. Select the accounts you want to export<br>
+            4. Google Authenticator will display one or more QR codes (if you have many accounts, it will split them into multiple QR codes)<br>
+            5. Scan it, somehow... This can be tricky since the QR is on your phone itself. This is one way to do it:<br>
+            <div style="padding-left: 16px; margin: 8px 0;">
+              • Take a screenshot and display it on your computer, then scan with another device<br>
+              • Or use a second phone/tablet to scan it<br>
+              • Or use your computer's webcam if you can display the QR code there<br>
+              • Copy the scanned link (it starts with <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 2px;">otpauth-migration://</code>)<br>
+              • If there are multiple QR codes, scan each one
+            </div>
+            6. Paste the copied link(s) into the text field (one per line if you have multiple)<br>
+            7. All accounts will be imported at once!
+          </div>
+        </details>
+        
         <p style="font-size: 12px; color: #9e9e9e;">Multiple URLs supported (one per line).<br/>Duplicates will be skipped.</p>
         <div class="form-group">
-          <textarea id="qr-input" placeholder="otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example" style="min-height: 148px;"></textarea>
+          <textarea id="qr-input" placeholder="otpauth://..." style="min-height: 120px;"></textarea>
         </div>
         <button id="parse-qr" class="primary" style="width: 100%;">Parse & Add Entries</button>
         <div id="qr-result" class="qr-result" style="display: none;"></div>
@@ -157,7 +184,7 @@ const CONFIG_HTML = `
   </div>
 
   <div class="actions">
-    <button id="save" class="primary" style="width: 100%;">Send to Watch</button>
+    <button id="save" class="primary" style="width: 100%;">Send to the Watch</button>
   </div>
 
   <script>
@@ -179,17 +206,25 @@ const CONFIG_HTML = `
     var entriesRoot = document.getElementById('entries');
     var draggedElement = null;
 
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     function createEntryView(entry, index) {
       var container = document.createElement('div');
       container.className = 'entry';
       container.dataset.index = index;
       container.draggable = true;
 
+      // Use escapeHtml to prevent XSS when rendering user-controlled data
       container.innerHTML = [
         '<span class="drag-handle">⋮⋮</span>',
         '<div class="entry-content">',
-          '<div class="entry-label">' + (entry.label || 'Unnamed') + '</div>',
-          '<div class="entry-account">' + (entry.account_name || '') + '</div>',
+          '<div class="entry-label">' + escapeHtml(entry.label || 'Unnamed') + '</div>',
+          '<div class="entry-account">' + escapeHtml(entry.account_name || '') + '</div>',
         '</div>',
         '<button type="button" class="entry-remove">×</button>'
       ].join('');
@@ -299,6 +334,267 @@ const CONFIG_HTML = `
       }).join(';');
     }
 
+    // Decode protobuf varint
+    function readVarint(bytes, pos) {
+      var value = 0;
+      var shift = 0;
+      var byte;
+      
+      do {
+        if (shift >= 28) {
+          throw new Error('Varint too large');
+        }
+        if (pos >= bytes.length) {
+          throw new Error('Unexpected end of varint');
+        }
+        byte = bytes.charCodeAt(pos++);
+        value |= (byte & 0x7F) << shift;
+        shift += 7;
+      } while (byte & 0x80);
+      
+      return { value: value, pos: pos };
+    }
+
+    // Parse Google Authenticator migration format
+    function parseGoogleAuthMigration(text) {
+      try {
+        // Parse URL
+        var url = new URL(text);
+        
+        if (url.protocol !== 'otpauth-migration:') {
+          throw new Error('Not an otpauth-migration URL');
+        }
+        
+        if (url.hostname !== 'offline') {
+          throw new Error('Only offline migration is supported');
+        }
+        
+        // Extract data parameter
+        var params = {};
+        url.searchParams.forEach(function(value, key) {
+          params[key.toLowerCase()] = value;
+        });
+        
+        if (!params.data) {
+          throw new Error('No data parameter found');
+        }
+        
+        var data = params.data;
+        var bytes;
+        try {
+          bytes = atob(data);
+        } catch (e) {
+          throw new Error('Invalid Base64 encoding in data parameter');
+        }
+        
+        var accounts = [];
+        var skippedAccounts = [];
+        var pos = 0;
+        
+        // Protobuf parser for Google Authenticator format
+        while (pos < bytes.length) {
+          var tag = bytes.charCodeAt(pos++);
+          var wireType = tag & 0x07;
+          var fieldNumber = tag >> 3;
+          
+          if (wireType === 2) { // Length-delimited
+            var lengthResult = readVarint(bytes, pos);
+            var length = lengthResult.value;
+            pos = lengthResult.pos;
+            
+            if (pos + length > bytes.length) {
+              // Data length exceeds available bytes
+              throw new Error('Data length exceeds available bytes');
+            }
+            
+            var value = bytes.slice(pos, pos + length);
+            pos += length;
+            
+            if (fieldNumber === 1) { // otp_parameters
+              try {
+                var account = parseOtpParameters(value);
+                accounts.push(account);
+              } catch (e) {
+                // Account validation failed, save error details
+                skippedAccounts.push(e.message);
+              }
+            }
+          } else if (wireType === 0) { // Varint
+            var varintResult = readVarint(bytes, pos);
+            pos = varintResult.pos;
+          } else if (wireType === 1) { // 64-bit
+            if (pos + 8 > bytes.length) {
+              throw new Error('Insufficient bytes for 64-bit field');
+            }
+            pos += 8;
+          } else if (wireType === 5) { // 32-bit
+            if (pos + 4 > bytes.length) {
+              throw new Error('Insufficient bytes for 32-bit field');
+            }
+            pos += 4;
+          } else {
+            throw new Error('Unknown wire type: ' + wireType);
+          }
+        }
+        
+        return { accounts: accounts, skippedAccounts: skippedAccounts };
+      } catch (err) {
+        throw new Error('Failed to parse Google Auth migration: ' + err.message);
+      }
+    }
+    
+    function parseOtpParameters(data) {
+      var secret = '';
+      var name = '';
+      var issuer = '';
+      var algorithm = 0;
+      var digits = 6;
+      var type = 2; // TOTP (default)
+      
+      var pos = 0;
+      while (pos < data.length) {
+        var tag = data.charCodeAt(pos++);
+        var wireType = tag & 0x07;
+        var fieldNumber = tag >> 3;
+        
+        if (wireType === 2) { // Length-delimited (bytes/string)
+          var lengthResult = readVarint(data, pos);
+          var length = lengthResult.value;
+          pos = lengthResult.pos;
+          
+          if (pos + length > data.length) {
+            // Data length exceeds available bytes
+            throw new Error('Data length exceeds available bytes in OTP parameters');
+          }
+          
+          var value = data.slice(pos, pos + length);
+          pos += length;
+          
+          if (fieldNumber === 1) { // secret
+            // Convert bytes to base32
+            var hexArray = [];
+            for (var i = 0; i < value.length; i++) {
+              hexArray.push(value.charCodeAt(i).toString(16).padStart(2, '0'));
+            }
+            var hex = hexArray.join('');
+            
+            var base32Secret = hexToBase32(hex);
+            
+            // Validate Base32: not empty, only A-Z, 2-7, and =
+            if (!base32Secret || !/^[A-Z2-7=]+$/.test(base32Secret)) {
+              throw new Error('Invalid secret encoding');
+            }
+            
+            secret = base32Secret;
+          } else if (fieldNumber === 2) { // name
+            name = value;
+          } else if (fieldNumber === 3) { // issuer
+            issuer = value;
+          }
+        } else if (wireType === 0) { // Varint
+          var varintResult = readVarint(data, pos);
+          var value = varintResult.value;
+          pos = varintResult.pos;
+          
+          if (fieldNumber === 4) { // algorithm
+            // Accept valid proto enum values: 0=UNSPECIFIED (defaults to SHA1), 1=SHA1, 2=SHA256, 3=SHA512
+            if (value >= 0 && value <= 3) {
+              algorithm = value > 0 ? value - 1 : 0;
+            } else {
+              // Invalid algorithm value, reject input
+              throw new Error('Invalid algorithm value: ' + value);
+            }
+          } else if (fieldNumber === 5) { // digits
+            // Accept valid proto enum values: 0=UNSPECIFIED (defaults to 6), 1=6 digits, 2=8 digits
+            if (value === 0) {
+              digits = 6; // DIGIT_COUNT_UNSPECIFIED, use default
+            } else if (value === 1) {
+              digits = 6;
+            } else if (value === 2) {
+              digits = 8;
+            } else {
+              // Invalid digits value, reject input
+              throw new Error('Invalid digits value: ' + value);
+            }
+          } else if (fieldNumber === 6) { // type
+            type = value;
+          }
+        } else if (wireType === 1) { // 64-bit
+          if (pos + 8 > data.length) {
+            throw new Error('Insufficient bytes for 64-bit field in OTP parameters');
+          }
+          pos += 8;
+        } else if (wireType === 5) { // 32-bit
+          if (pos + 4 > data.length) {
+            throw new Error('Insufficient bytes for 32-bit field in OTP parameters');
+          }
+          pos += 4;
+        } else {
+          throw new Error('Unknown wire type in OTP parameters: ' + wireType);
+        }
+      }
+      
+      if (!secret) {
+        throw new Error('No secret found in OTP parameters');
+      }
+      
+      if (type === 1) {
+        throw new Error('HOTP is not supported, only TOTP');
+      } else if (type !== 2 && type !== 0) {
+        throw new Error('Unknown OTP type: ' + type);
+      }
+      
+      // Parse name to extract account if needed
+      var account_name = '';
+      if (name.includes(':')) {
+        var parts = name.split(':');
+        if (!issuer) issuer = parts[0];
+        account_name = parts.slice(1).join(':');
+      } else {
+        account_name = name;
+      }
+      
+      return {
+        label: issuer || 'Unknown',
+        account_name: account_name,
+        secret: secret,
+        period: 30,
+        digits: digits,
+        algorithm: algorithm
+      };
+    }
+    
+    function hexToBase32(hex) {
+      var base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      var bitsArray = [];
+      
+      for (var i = 0; i < hex.length; i += 2) {
+        var byte = parseInt(hex.slice(i, i + 2), 16);
+        bitsArray.push(byte.toString(2).padStart(8, '0'));
+      }
+      
+      var bits = bitsArray.join('');
+      
+      var base32Array = [];
+      for (var i = 0; i < bits.length; i += 5) {
+        var chunk = bits.slice(i, i + 5);
+        // Pad remaining bits with zeros on the right if less than 5 bits
+        if (chunk.length < 5) {
+          chunk = chunk.padEnd(5, '0');
+        }
+        base32Array.push(base32chars[parseInt(chunk, 2)]);
+      }
+      
+      var base32 = base32Array.join('');
+      
+      // Add padding if needed (Base32 padding to 8-character blocks)
+      while (base32.length % 8 !== 0) {
+        base32 += '=';
+      }
+      
+      return base32;
+    }
+
     function parseOtpUri(text) {
       try {
         var url = new URL(text);
@@ -374,12 +670,50 @@ const CONFIG_HTML = `
     function processMultipleUrls(text) {
       var newline = String.fromCharCode(10);
       var lines = text.split(newline);
-      var results = { added: 0, skipped: 0, errors: 0, limitReached: false };
+      var results = { added: 0, skipped: 0, errors: 0, limitReached: false, errorDetails: [] };
       
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
         if (!line) continue;
         
+        // Check if it's a Google Authenticator migration URL
+        if (line.startsWith('otpauth-migration://')) {
+          try {
+            var migrationResult = parseGoogleAuthMigration(line);
+            var migratedAccounts = migrationResult.accounts;
+            
+            // Add skipped accounts errors to error details
+            if (migrationResult.skippedAccounts && migrationResult.skippedAccounts.length > 0) {
+              results.errors += migrationResult.skippedAccounts.length;
+              for (var k = 0; k < migrationResult.skippedAccounts.length; k++) {
+                results.errorDetails.push('Google Auth account #' + (k + 1) + ': ' + migrationResult.skippedAccounts[k]);
+              }
+            }
+            
+            for (var j = 0; j < migratedAccounts.length; j++) {
+              // Check limit before adding
+              if (entries.length >= MAX_ACCOUNTS) {
+                results.limitReached = true;
+                break;
+              }
+              
+              var entry = migratedAccounts[j];
+              if (isDuplicate(entry)) {
+                results.skipped++;
+              } else {
+                entries.push(entry);
+                results.added++;
+              }
+            }
+            if (results.limitReached) break;
+          } catch (e) {
+            results.errors++;
+            results.errorDetails.push('Google Auth migration failed: ' + e.message);
+          }
+          continue;
+        }
+        
+        // Regular otpauth:// URL
         // Check limit before processing
         if (entries.length >= MAX_ACCOUNTS) {
           results.limitReached = true;
@@ -396,6 +730,8 @@ const CONFIG_HTML = `
           }
         } catch (e) {
           results.errors++;
+          var shortUrl = line.length > 50 ? line.substring(0, 50) + '...' : line;
+          results.errorDetails.push('Parse error: ' + e.message + ' (' + shortUrl + ')');
         }
       }
       
@@ -406,6 +742,20 @@ const CONFIG_HTML = `
       var resultDiv = document.getElementById('qr-result');
       if (resultDiv) {
         resultDiv.style.display = 'none';
+      }
+    }
+    
+    function showParseButton() {
+      var parseBtn = document.getElementById('parse-qr');
+      if (parseBtn) {
+        parseBtn.style.display = 'block';
+      }
+    }
+    
+    function hideParseButton() {
+      var parseBtn = document.getElementById('parse-qr');
+      if (parseBtn) {
+        parseBtn.style.display = 'none';
       }
     }
 
@@ -500,9 +850,19 @@ const CONFIG_HTML = `
       if (results.errors > 0) {
         if (resultText) resultText += '<br>';
         if (results.errors === 1) {
-          resultText += 'Parse error: 1 URL failed';
+          resultText += '<span style="color: #ff9800;">Parse error: 1 URL failed</span>';
         } else {
-          resultText += 'Parse errors: ' + results.errors + ' URLs failed';
+          resultText += '<span style="color: #ff9800;">Parse errors: ' + results.errors + ' URLs failed</span>';
+        }
+        
+        // Show error details
+        if (results.errorDetails && results.errorDetails.length > 0) {
+          resultText += '<br><div style="margin-top: 8px; padding: 8px; background: rgba(255,152,0,0.1); border-radius: 4px; font-size: 11px; text-align: left;">';
+          resultText += '<strong>Error details:</strong><br>';
+          for (var i = 0; i < results.errorDetails.length; i++) {
+            resultText += '• ' + escapeHtml(results.errorDetails[i]) + '<br>';
+          }
+          resultText += '</div>';
         }
       }
       if (results.limitReached) {
@@ -510,14 +870,23 @@ const CONFIG_HTML = `
         resultText += '<strong>Limit reached: ' + MAX_ACCOUNTS + ' accounts maximum</strong>';
       }
 
+      // Hide button and show result
+      hideParseButton();
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = resultText;
-      
-      setTimeout(hideQrResult, 5000);
 
       if (results.added > 0) {
         document.getElementById('qr-input').value = '';
         renderEntries();
+      }
+      
+      // If nothing was added and there were errors, show alert with details
+      if (results.added === 0 && results.errors > 0 && results.errorDetails.length > 0) {
+        var alertMsg = 'Import failed!\\n\\nErrors:\\n';
+        for (var i = 0; i < results.errorDetails.length; i++) {
+          alertMsg += '• ' + results.errorDetails[i] + '\\n';
+        }
+        alert(alertMsg);
       }
     }
 
@@ -533,6 +902,12 @@ const CONFIG_HTML = `
 
     // QR entry
     document.getElementById('parse-qr').addEventListener('click', addQrEntry);
+    
+    // Show parse button when user types in QR input
+    document.getElementById('qr-input').addEventListener('input', function() {
+      showParseButton();
+      hideQrResult();
+    });
 
     // Save button
     document.getElementById('save').addEventListener('click', function() {
@@ -650,4 +1025,5 @@ Pebble.addEventListener('webviewclosed', e => {
 Pebble.addEventListener('appmessage', () => {
   // Message handling not needed for unidirectional sync
 });
+
 
