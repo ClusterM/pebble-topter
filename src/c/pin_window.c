@@ -78,7 +78,7 @@ PinWindow* pin_window_create(PinWindowCallbacks callbacks, void *context) {
   layer_add_child(window_layer, text_layer_get_layer(pin_window->main_text));
   
   // Sub TextLayer
-  const GEdgeInsets sub_text_insets = {.top = 115, .right = 5, .bottom = 10, .left = 5};
+  const GEdgeInsets sub_text_insets = {.top = (bounds.size.h + PIN_WINDOW_SIZE.h) / 2 + 10, .left = 0, .bottom = 0, .right = 0};
   pin_window->sub_text = text_layer_create(grect_inset(bounds, sub_text_insets));
   if (!pin_window->sub_text) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create sub text layer");
